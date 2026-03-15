@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import mimetypes
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, TypeVar, Union
 
 from . import crypto, raw
+from . import filters as rubigram_filters
 from rubigram.crypto import (
     AuthSigner,
     AuthUnwrapper,
@@ -33,6 +35,7 @@ from rubigram.exceptions import (
 from rubigram.network.discovery import DcDiscovery
 from rubigram.network.socket import SocketTransport
 from rubigram.network.transport import ApiUrlPool, RpcTransport
+from rubigram.network.upload import UploadTransport
 from rubigram.raw.base import RawMethod
 from rubigram.raw.methods import (
     BlockUser,
@@ -46,6 +49,7 @@ from rubigram.raw.methods import (
     GetMessages,
     GetObjectByUsername,
     GetUserInfo,
+    RequestSendFile,
     RegisterDevice,
     SendCode,
     SendMessage,
@@ -66,6 +70,7 @@ from rubigram.types import (
     SentCode,
     SentMessage,
     SocketUpdates,
+    UploadDescriptor,
     UserInfo,
 )
 from rubigram.utils import generate_device_hash, generate_tmp_session
@@ -75,11 +80,18 @@ log = logging.getLogger(__name__)
 ResultT = TypeVar("ResultT")
 
 
+class MessageHandler:
+    def __init__(self, callback: Any, flt: Any):
+        self.callback = callback
+        self.filter = flt
+
+
 class Client:
     """Raw-first Rubika HTTP client."""
 
     raw = raw
     crypto = crypto
+    filters = rubigram_filters
 
     APP_NAME = "Main"
     APP_VERSION = "4.4.27"
@@ -152,10 +164,11 @@ class Client:
         self._dc_discovery: Optional[DcDiscovery] = None
         self._pool: Optional[ApiUrlPool] = None
         self._transport: Optional[RpcTransport] = None
+        self._upload_transport: Optional[UploadTransport] = None
         self._socket_transport: Optional[SocketTransport] = None
         self._codec: Optional[Codec] = None
         self._is_connected = False
-        self._message_handlers: list[Any] = []
+        self._message_handlers: list[MessageHandler] = []
         self._update_listener_task: Optional[asyncio.Task[None]] = None
         self._idle_event = asyncio.Event()
 
@@ -220,6 +233,7 @@ class Client:
                 self._pool,
                 timeout=self.timeout,
             )
+            self._upload_transport = UploadTransport(timeout=max(self.timeout, 60.0))
             self._is_connected = True
             if not await self.storage.auth() and self._should_interactive_authorize():
                 await self.authorize()
@@ -240,9 +254,11 @@ class Client:
     async def export_session_string(self) -> str:
         return await self.storage.export_session_string()
 
-    def on_message(self):
+    def on_message(self, flt: Any = None):
+        flt = flt or rubigram_filters.all
+
         def decorator(func):
-            self._message_handlers.append(func)
+            self._message_handlers.append(MessageHandler(func, flt))
             return func
 
         return decorator
@@ -306,6 +322,9 @@ class Client:
         await self.storage.set_registered_device_version(self.APP_VERSION)
         return result
 
+    async def request_send_file(self, file_name: str, size: int, mime: str) -> UploadDescriptor:
+        return await self.invoke(RequestSendFile(file_name=file_name, size=size, mime=mime))
+
     async def get_user_info(self, user_guid: str) -> UserInfo:
         return await self.invoke(GetUserInfo(user_guid=user_guid))
 
@@ -348,18 +367,53 @@ class Client:
         self,
         object_guid: str,
         rnd: str,
-        text: str,
+        text: Optional[str] = None,
         parse_mode: Optional[str] = None,
         reply_to_message_id: Optional[str] = None,
+        file_inline: Optional[Dict[str, Any]] = None,
     ) -> SentMessage:
         return await self.invoke(
             SendMessage(
                 object_guid=object_guid,
                 rnd=rnd,
                 text=text,
+                file_inline=file_inline,
                 parse_mode=parse_mode,
                 reply_to_message_id=reply_to_message_id,
             )
+        )
+
+    async def send_voice(
+        self,
+        object_guid: str,
+        path: str | Path,
+        *,
+        rnd: Optional[str] = None,
+        duration_ms: float | int = 0,
+        mime: Optional[str] = None,
+    ) -> SentMessage:
+        file_path = Path(path)
+        file_name = file_path.name
+        file_size = file_path.stat().st_size
+        file_mime = mime or self._guess_upload_mime(file_path)
+        descriptor = await self.request_send_file(file_name=file_name, size=file_size, mime=file_mime)
+        uploaded = await self._upload_file(path=file_path, descriptor=descriptor)
+
+        file_inline = {
+            "file_name": file_name,
+            "time": duration_ms,
+            "size": file_size,
+            "type": "Voice",
+            "dc_id": uploaded.dc_id,
+            "file_id": uploaded.id,
+            "mime": file_mime,
+            "access_hash_rec": uploaded.access_hash_rec,
+        }
+
+        return await self.send_message(
+            object_guid=object_guid,
+            rnd=rnd or str(time.time_ns()),
+            file_inline=file_inline,
         )
 
     async def edit_message(self, object_guid: str, message_id: str, text: str) -> RawObject:
@@ -510,7 +564,13 @@ class Client:
                 continue
 
             for handler in list(self._message_handlers):
-                result = handler(self, message)
+                passed = handler.filter(self, message)
+                if inspect.isawaitable(passed):
+                    passed = await passed
+                if not passed:
+                    continue
+
+                result = handler.callback(self, message)
                 if inspect.isawaitable(result):
                     await result
 
@@ -566,6 +626,24 @@ class Client:
             await self._finalize_login(result["auth"], result)
 
         return method.parse_response(self, result)
+
+    async def _upload_file(self, *, path: str | Path, descriptor: UploadDescriptor) -> UploadDescriptor:
+        if self._upload_transport is None:
+            raise TransportError("Upload transport is not initialized")
+        auth = await self.storage.auth()
+        if not auth:
+            raise LoginRequired("Uploading files requires an authenticated session")
+        return await self._upload_transport.upload_file(auth=auth, descriptor=descriptor, path=path)
+
+    def _guess_upload_mime(self, path: Path) -> str:
+        guessed, _ = mimetypes.guess_type(path.name)
+        if guessed:
+            suffix = path.suffix.lower().lstrip(".")
+            if suffix in {"ogg", "mp4", "jpg", "jpeg", "png", "zip"}:
+                return "jpg" if suffix == "jpeg" else suffix
+            return guessed
+        suffix = path.suffix.lower().lstrip(".")
+        return suffix or "bin"
 
     def _build_data_object(self, method: RawMethod) -> dict[str, Any]:
         input_data = method.to_input()
@@ -787,6 +865,10 @@ class Client:
         if self._transport is not None:
             await self._transport.close()
             self._transport = None
+
+        if self._upload_transport is not None:
+            await self._upload_transport.close()
+            self._upload_transport = None
 
         if self._dc_discovery is not None:
             await self._dc_discovery.close()

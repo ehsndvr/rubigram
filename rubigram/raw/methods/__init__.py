@@ -4,6 +4,7 @@ from rubigram.raw.methods.auth import (
     SignIn,
     SignUp,
 )
+from rubigram.raw.methods.files import RequestSendFile
 from rubigram.raw.methods.messages import (
     SendMessage,
     EditMessage,
@@ -27,6 +28,7 @@ __all__ = [
     "SignIn",
     "SignUp",
     "RegisterDevice",
+    "RequestSendFile",
     "SendMessage",
     "EditMessage",
     "DeleteMessage",

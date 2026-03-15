@@ -64,3 +64,18 @@ def build_websocket_headers() -> Dict[str, str]:
         "referer": WEB_REFERER,
     }
 
+
+def build_upload_headers() -> Dict[str, str]:
+    headers = dict(BASE_BROWSER_HEADERS)
+    headers.update(
+        {
+            "accept": "application/json, text/plain, */*",
+            "origin": WEB_ORIGIN,
+            "referer": WEB_REFERER,
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "connection": "keep-alive",
+        }
+    )
+    return headers

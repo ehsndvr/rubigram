@@ -45,8 +45,80 @@ class Empty(RawObject):
     pass
 
 
+class UploadDescriptor(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        id: Optional[str] = None,
+        dc_id: Optional[str] = None,
+        access_hash_send: Optional[str] = None,
+        access_hash_rec: Optional[str] = None,
+        upload_url: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.id = id
+        self.dc_id = dc_id
+        self.access_hash_send = access_hash_send
+        self.access_hash_rec = access_hash_rec
+        self.upload_url = upload_url
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["UploadDescriptor"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            id=data.get("id"),
+            dc_id=data.get("dc_id"),
+            access_hash_send=data.get("access_hash_send"),
+            access_hash_rec=data.get("access_hash_rec"),
+            upload_url=data.get("upload_url"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
 class OnlineTime(RawObject):
     pass
+
+
+class ForwardedFrom(RawObject):
+    pass
+
+
+class FileInline(RawObject):
+    pass
+
+
+class StickerFile(RawObject):
+    pass
+
+
+class Sticker(RawObject):
+    @classmethod
+    def _parse(cls, client: Any, data: Any) -> Any:
+        result = super()._parse(client, data)
+        if result is not None and getattr(result, "file", None) is not None:
+            result.file = StickerFile._parse(client, result.file)
+        return result
+
+
+class RubinoPostData(RawObject):
+    pass
+
+
+class LiveStatus(RawObject):
+    pass
+
+
+class LiveData(RawObject):
+    @classmethod
+    def _parse(cls, client: Any, data: Any) -> Any:
+        result = super()._parse(client, data)
+        if result is not None and getattr(result, "live_status", None) is not None:
+            result.live_status = LiveStatus._parse(client, result.live_status)
+        return result
 
 
 class User(Object):
@@ -96,6 +168,25 @@ class User(Object):
 
 
 class Message(RawObject):
+    @classmethod
+    def _parse(cls, client: Any, data: Any) -> Any:
+        result = super()._parse(client, data)
+        if result is None or not isinstance(result, cls):
+            return result
+
+        if getattr(result, "forwarded_from", None) is not None:
+            result.forwarded_from = ForwardedFrom._parse(client, result.forwarded_from)
+        if getattr(result, "file_inline", None) is not None:
+            result.file_inline = FileInline._parse(client, result.file_inline)
+        if getattr(result, "sticker", None) is not None:
+            result.sticker = Sticker._parse(client, result.sticker)
+        if getattr(result, "rubino_post_data", None) is not None:
+            result.rubino_post_data = RubinoPostData._parse(client, result.rubino_post_data)
+        if getattr(result, "live_data", None) is not None:
+            result.live_data = LiveData._parse(client, result.live_data)
+
+        return result
+
     async def reply(self, text: str, parse_mode: Optional[str] = None) -> Any:
         if self._client is None:
             raise RuntimeError("This message is not bound to a Client instance")
@@ -115,6 +206,10 @@ class Message(RawObject):
             parse_mode=parse_mode,
             reply_to_message_id=message_id,
         )
+
+    @property
+    def chat_id(self) -> Any:
+        return getattr(self, "object_guid", None)
 
 
 class PeerObject(RawObject):
@@ -554,6 +649,11 @@ class SocketMessageUpdate(Object):
             is_scheduled=data.get("is_scheduled"),
         )
         if result.message is not None:
+            setattr(result.message, "action", result.action)
+            setattr(result.message, "chat_type", result.type)
+            setattr(result.message, "state", result.state)
+            setattr(result.message, "is_scheduled", result.is_scheduled)
+            setattr(result.message, "prev_message_id", result.prev_message_id)
             if getattr(result.message, "object_guid", None) is None:
                 setattr(result.message, "object_guid", result.object_guid)
             if getattr(result.message, "message_id", None) is None:

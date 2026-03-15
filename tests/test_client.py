@@ -1,16 +1,20 @@
 import asyncio
 import base64
+import uuid
+from pathlib import Path
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 
 import rubigram.client as client_module
+from rubigram import filters
 from rubigram.client import Client
 from rubigram.crypto import encrypt_aes_cbc, export_public_key_for_login, rsa_key_generate
 from rubigram.exceptions import AuthKeyInvalid, CodeIsInvalid, InvalidInput, LoginRequired, RegisterDeviceRequired
 from rubigram.raw.methods import GetUserInfo
 from rubigram.storage import MemoryStorage
+from rubigram.types import Message
 
 
 def encrypt_response(data, request_key):
@@ -716,6 +720,316 @@ def test_message_reply_uses_send_message_with_reply_to(monkeypatch):
         assert calls[0]["reply_to_message_id"] == "1"
         assert calls[0]["rnd"].isdigit()
 
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_on_message_filter_blocks_non_matching_messages(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+
+        seen = []
+
+        @client.on_message(filters.text & filters.private)
+        async def handler(app, message):
+            seen.append(message.text)
+
+        update = client_module.SocketUpdates._parse(
+            client,
+            {
+                "message_updates": [
+                    {
+                        "message_id": "1",
+                        "action": "New",
+                        "object_guid": "u123",
+                        "type": "User",
+                        "message": {
+                            "message_id": "1",
+                            "text": "hello",
+                            "type": "Text",
+                        },
+                    },
+                    {
+                        "message_id": "2",
+                        "action": "New",
+                        "object_guid": "g123",
+                        "type": "Group",
+                        "message": {
+                            "message_id": "2",
+                            "text": "ignored",
+                            "type": "Text",
+                        },
+                    },
+                ]
+            },
+        )
+
+        await client._dispatch_socket_update(update)
+
+        assert seen == ["hello"]
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_filters_detect_media_and_regex():
+    message = Message._parse(
+        None,
+        {
+            "type": "FileInlineCaption",
+            "text": "join: rubika.ir/joing/12345678901234567890123456789012",
+            "file_inline": {"type": "Image"},
+            "metadata": [{"type": "Bold"}],
+            "chat_type": "User",
+            "action": "New",
+        },
+    )
+
+    assert filters.caption(None, message) is True
+    assert filters.photo(None, message) is True
+    assert filters.media(None, message) is True
+    assert filters.group_link(None, message) is True
+    assert filters.bold(None, message) is True
+    assert (filters.caption & filters.private)(None, message) is True
+
+
+def test_message_parses_rubino_sticker_voice_gif_and_live_payloads():
+    rubino = Message._parse(
+        None,
+        {
+            "type": "RubinoPost",
+            "forwarded_from": {"type_from": "User", "message_id": "1", "object_guid": "u1"},
+            "rubino_post_data": {"post_id": "p1", "post_profile_id": "pp1", "track_id": "Messenger"},
+        },
+    )
+    sticker = Message._parse(
+        None,
+        {
+            "type": "Sticker",
+            "sticker": {
+                "emoji_character": "x",
+                "sticker_id": "s1",
+                "file": {"file_id": "10", "type": "File"},
+            },
+        },
+    )
+    voice = Message._parse(
+        None,
+        {
+            "type": "FileInline",
+            "file_inline": {"file_id": 1, "type": "Voice", "file_name": "a.ogg"},
+        },
+    )
+    live = Message._parse(
+        None,
+        {
+            "type": "Live",
+            "live_data": {
+                "live_id": "l1",
+                "title": "oo",
+                "live_status": {"status": "Ready", "can_play": True},
+            },
+        },
+    )
+
+    assert rubino.rubino_post_data.post_id == "p1"
+    assert rubino.forwarded_from.object_guid == "u1"
+    assert sticker.sticker.file.file_id == "10"
+    assert voice.file_inline.type == "Voice"
+    assert live.live_data.live_status.status == "Ready"
+    assert filters.rubino(None, rubino) is True
+    assert filters.sticker(None, sticker) is True
+    assert filters.voice(None, voice) is True
+    assert filters.live(None, live) is True
+
+
+def test_request_send_file_returns_typed_descriptor(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "requestSendFile"
+            assert decrypted_request["input"] == {
+                "file_name": "voice.ogg",
+                "size": 1654,
+                "mime": "ogg",
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "id": "87998036915657",
+                        "dc_id": "491",
+                        "access_hash_send": "euthauxjfybzjbaaymlitbhpio8651",
+                        "upload_url": "https://upmessenger491.iranlms.ir/UploadFile.ashx",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.request_send_file("voice.ogg", 1654, "ogg")
+
+        assert result.id == "87998036915657"
+        assert result.dc_id == "491"
+        assert result.access_hash_send == "euthauxjfybzjbaaymlitbhpio8651"
+        assert result.upload_url == "https://upmessenger491.iranlms.ir/UploadFile.ashx"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_send_voice_uploads_and_sends_file_inline(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        temp_path = Path.cwd() / f"_voice_{uuid.uuid4().hex}.ogg"
+        temp_path.write_bytes(b"OggS-test")
+
+        async def upload_file(self, *, auth, descriptor, path):
+            assert auth == "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb"
+            assert descriptor.id == "87998036915657"
+            assert Path(path) == temp_path
+            return client_module.UploadDescriptor(
+                id=descriptor.id,
+                dc_id=descriptor.dc_id,
+                access_hash_send=descriptor.access_hash_send,
+                access_hash_rec="1827275907694936106542107050922026031521",
+                upload_url=descriptor.upload_url,
+            )
+
+        monkeypatch.setattr(client_module.UploadTransport, "upload_file", upload_file)
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            method = decrypted_request["method"]
+
+            if method == "requestSendFile":
+                return encrypt_response(
+                    {
+                        "status": "OK",
+                        "status_det": "OK",
+                        "data": {
+                            "id": "87998036915657",
+                            "dc_id": "491",
+                            "access_hash_send": "euthauxjfybzjbaaymlitbhpio8651",
+                            "upload_url": "https://upmessenger491.iranlms.ir/UploadFile.ashx",
+                        },
+                    },
+                    auth,
+                )
+
+            if method == "sendMessage":
+                assert decrypted_request["input"]["object_guid"] == "u123"
+                assert decrypted_request["input"]["file_inline"] == {
+                    "file_name": temp_path.name,
+                    "time": 720,
+                    "size": temp_path.stat().st_size,
+                    "type": "Voice",
+                    "dc_id": "491",
+                    "file_id": "87998036915657",
+                    "mime": "ogg",
+                    "access_hash_rec": "1827275907694936106542107050922026031521",
+                }
+                assert "text" not in decrypted_request["input"]
+                return encrypt_response(
+                    {
+                        "status": "OK",
+                        "status_det": "OK",
+                        "data": {
+                            "message_update": {
+                                "message_id": "1556497285304832",
+                                "action": "New",
+                                "message": {
+                                    "message_id": "1556497285304832",
+                                    "file_inline": {
+                                        "file_id": 87998036915657,
+                                        "mime": "ogg",
+                                        "dc_id": 491,
+                                        "access_hash_rec": "1827275907694936106542107050922026031521",
+                                        "file_name": temp_path.name,
+                                        "time": 0,
+                                        "size": temp_path.stat().st_size,
+                                        "type": "Voice",
+                                    },
+                                    "time": "1773599154",
+                                    "is_edited": False,
+                                    "type": "FileInline",
+                                    "author_type": "User",
+                                    "author_object_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                                    "allow_transcription": False,
+                                },
+                                "updated_parameters": [],
+                                "timestamp": "1773599154",
+                                "prev_message_id": "1556479276978832",
+                                "object_guid": "u123",
+                                "type": "User",
+                                "state": "1773599094",
+                                "is_scheduled": False,
+                            },
+                            "status": "OK",
+                            "chat_update": {
+                                "object_guid": "u123",
+                                "action": "Edit",
+                                "chat": {
+                                    "time_string": "177359915400001556497285304832",
+                                    "last_message": {
+                                        "message_id": "1556497285304832",
+                                        "type": "Other",
+                                        "text": "پیام صوتی",
+                                        "author_object_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                                        "is_mine": True,
+                                        "author_title": "شما",
+                                        "author_type": "User",
+                                    },
+                                    "last_seen_peer_mid": "1556482278263832",
+                                    "status": "Active",
+                                    "time": 1773599154,
+                                    "last_message_id": "1556497285304832",
+                                },
+                                "updated_parameters": [
+                                    "last_message_id",
+                                    "last_message",
+                                    "status",
+                                    "time_string",
+                                    "last_seen_peer_mid",
+                                    "time",
+                                ],
+                                "timestamp": "1773599154",
+                                "type": "User",
+                            },
+                        },
+                    },
+                    auth,
+                )
+
+            raise AssertionError(f"Unexpected method: {method}")
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.send_voice("u123", temp_path, duration_ms=720)
+
+        assert result.message_update.message.file_inline.type == "Voice"
+        assert result.message_update.object_guid == "u123"
+        assert result.chat_update.object_guid == "u123"
+
+        temp_path.unlink(missing_ok=True)
         await client.stop()
 
     asyncio.run(scenario())

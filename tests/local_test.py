@@ -1,29 +1,12 @@
 import asyncio
-from rubigram import Client
-
-
-# async def main():
-#     async with Client("my_account") as app:
-#         me = await app.get_me()
-#         print(me.user.first_name, me.user.user_guid)
-#         print(me.chat.status)
-#         # sent = await app.send_message(object_guid="u0DiqTP0d4d36e090fb7060d540a33c7", rnd="1", text="Hello from Rubigram!")
-#         # print(sent.message_update.message.text)
-
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
-
-import asyncio
-from rubigram import Client
+from rubigram import Client, filters
 
 app = Client("my_account")
 
 
-@app.on_message()
+@app.on_message(filters.text & filters.private & ~filters.me)
 async def handle_message(client, message):
-    print("text:", message.text)
-    print("from:", message.author_object_guid)
+    print(message.text)
     await message.reply("Hello from Rubigram!")
 
 

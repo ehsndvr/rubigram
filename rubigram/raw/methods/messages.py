@@ -17,18 +17,22 @@ class SendMessage(RawMethod[SentMessage]):
     """
     object_guid: str
     rnd: str
-    text: str
+    text: Optional[str] = None
+    file_inline: Optional[Dict[str, Any]] = None
     parse_mode: Optional[str] = None
     reply_to_message_id: Optional[str] = None
 
     method_name = "sendMessage"
 
     def to_input(self) -> Dict[str, Any]:
-        input_dict = {
+        input_dict: Dict[str, Any] = {
             "object_guid": self.object_guid,
             "rnd": self.rnd,
-            "text": self.text,
         }
+        if self.text is not None:
+            input_dict["text"] = self.text
+        if self.file_inline is not None:
+            input_dict["file_inline"] = self.file_inline
         if self.parse_mode:
             input_dict["parse_mode"] = self.parse_mode
         if self.reply_to_message_id:
