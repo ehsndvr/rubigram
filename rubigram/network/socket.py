@@ -32,6 +32,8 @@ class SocketTransport:
         self._connected_url: Optional[str] = None
         self._last_auth: Optional[str] = None
         self._heartbeat_task: Optional[asyncio.Task[None]] = None
+        self._reader_task: Optional[asyncio.Task[None]] = None
+        self._incoming_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     @staticmethod
     def _normalize_url(url: str) -> str:
@@ -111,10 +113,12 @@ class SocketTransport:
                     raise map_rpc_error(status, response.get("status_det"), response)
 
                 self._cancel_heartbeat()
+                self._cancel_reader()
                 self._websocket = websocket
                 self._connected_url = url
                 self._last_auth = auth
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(), name="rubigram-socket-heartbeat")
+                self._reader_task = asyncio.create_task(self._reader_loop(), name="rubigram-socket-reader")
                 return response
             except Exception as e:
                 last_error = e
@@ -142,14 +146,6 @@ class SocketTransport:
                     return
 
                 await websocket.send("{}")
-                raw_response = await asyncio.wait_for(websocket.recv(), timeout=self._timeout)
-                if isinstance(raw_response, bytes):
-                    raw_response = raw_response.decode("utf-8")
-
-                response = json.loads(raw_response)
-                status = response.get("status")
-                if status and status != "OK":
-                    raise map_rpc_error(status, response.get("status_det"), response)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -161,6 +157,35 @@ class SocketTransport:
         if self._heartbeat_task is not None:
             self._heartbeat_task.cancel()
             self._heartbeat_task = None
+
+    def _cancel_reader(self) -> None:
+        if self._reader_task is not None:
+            self._reader_task.cancel()
+            self._reader_task = None
+
+    async def _reader_loop(self) -> None:
+        while self._websocket is not None:
+            try:
+                raw_response = await self._websocket.recv()
+                if isinstance(raw_response, bytes):
+                    raw_response = raw_response.decode("utf-8")
+
+                response = json.loads(raw_response)
+                await self._incoming_queue.put(response)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("Socket reader failed for %s: %s", self._connected_url, e)
+                await self._drop_connection()
+                return
+
+    async def recv(self, timeout: Optional[float] = None) -> dict[str, Any]:
+        if self._websocket is None:
+            raise TransportError("Socket connection is not active")
+
+        if timeout is None:
+            return await self._incoming_queue.get()
+        return await asyncio.wait_for(self._incoming_queue.get(), timeout=timeout)
 
     async def _drop_connection(self) -> None:
         websocket = self._websocket
@@ -174,6 +199,15 @@ class SocketTransport:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+
+        reader_task = self._reader_task
+        self._reader_task = None
+        if reader_task is not None and reader_task is not asyncio.current_task():
+            reader_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reader_task
+
+        self._incoming_queue = asyncio.Queue()
 
         if websocket is not None:
             with contextlib.suppress(Exception):

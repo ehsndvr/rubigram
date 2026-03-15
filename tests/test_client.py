@@ -538,3 +538,184 @@ def test_get_me_uses_stored_user_guid(monkeypatch):
         await client.stop()
 
     asyncio.run(scenario())
+
+
+def test_get_chats_updates_uses_and_persists_state(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+        await client.storage.set_updates_state(1773595399)
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "getChatsUpdates"
+            assert decrypted_request["input"]["state"] == 1773595399
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "chats": [],
+                        "new_state": 1773595460,
+                        "status": "OK",
+                        "timestamp": "1773595520",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.get_chats_updates()
+
+        assert result.new_state == 1773595460
+        assert await client.storage.updates_state() == 1773595460
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_receive_socket_update_decrypts_messenger_frames(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        class StubSocketTransport:
+            async def handshake(self, auth, api_version="5", force_reconnect=False):
+                return {"status": "OK", "status_det": "OK"}
+
+            async def recv(self, timeout=None):
+                return {
+                    "type": "messenger",
+                    "data_enc": encrypt_aes_cbc(
+                        {
+                            "chat_updates": [],
+                            "message_updates": [
+                                {
+                                    "message_id": "1556351220500832",
+                                    "action": "New",
+                                    "message": {"message_id": "1556351220500832", "text": "sd", "type": "Text"},
+                                    "object_guid": "u1",
+                                    "state": "1773595631",
+                                }
+                            ],
+                            "show_notifications": [],
+                            "user_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                        },
+                        "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb",
+                    ),
+                }
+
+            async def close(self):
+                return None
+
+        client._socket_transport = StubSocketTransport()  # type: ignore[assignment]
+
+        result = await client.receive_socket_update(timeout=0.1)
+
+        assert result.user_guid == "u0DiqTP0d4d36e090fb7060d540a33c7"
+        assert result.message_updates[0].message.text == "sd"
+        assert result.message_updates[0].object_guid == "u1"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_on_message_dispatches_message_handlers(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+
+        seen = []
+
+        @client.on_message()
+        async def handler(app, message):
+            seen.append((app.name, message.text, message.author_object_guid))
+
+        update = client_module.SocketUpdates._parse(
+            client,
+            {
+                "message_updates": [
+                    {
+                        "message_id": "1",
+                        "action": "New",
+                        "message": {
+                            "message_id": "1",
+                            "text": "hello",
+                            "author_object_guid": "u123",
+                            "type": "Text",
+                        },
+                    }
+                ]
+            },
+        )
+
+        await client._dispatch_socket_update(update)
+
+        assert seen == [("test", "hello", "u123")]
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_message_reply_uses_send_message_with_reply_to(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+
+        calls = []
+
+        async def fake_send_message(self, object_guid, rnd, text, parse_mode=None, reply_to_message_id=None):
+            calls.append(
+                {
+                    "object_guid": object_guid,
+                    "rnd": rnd,
+                    "text": text,
+                    "parse_mode": parse_mode,
+                    "reply_to_message_id": reply_to_message_id,
+                }
+            )
+            return "sent"
+
+        monkeypatch.setattr(Client, "send_message", fake_send_message)
+
+        message = client_module.SocketUpdates._parse(
+            client,
+            {
+                "message_updates": [
+                    {
+                        "message_id": "1",
+                        "action": "New",
+                        "object_guid": "u123",
+                        "message": {
+                            "message_id": "1",
+                            "text": "hello",
+                            "author_object_guid": "u123",
+                            "type": "Text",
+                        },
+                    }
+                ]
+            },
+        ).message_updates[0].message
+
+        result = await message.reply("world")
+
+        assert result == "sent"
+        assert calls[0]["object_guid"] == "u123"
+        assert calls[0]["text"] == "world"
+        assert calls[0]["reply_to_message_id"] == "1"
+        assert calls[0]["rnd"].isdigit()
+
+        await client.stop()
+
+    asyncio.run(scenario())

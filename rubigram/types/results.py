@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Iterable, Optional
 
 from .object import Object
@@ -95,7 +96,25 @@ class User(Object):
 
 
 class Message(RawObject):
-    pass
+    async def reply(self, text: str, parse_mode: Optional[str] = None) -> Any:
+        if self._client is None:
+            raise RuntimeError("This message is not bound to a Client instance")
+
+        object_guid = getattr(self, "object_guid", None)
+        message_id = getattr(self, "message_id", None)
+
+        if not object_guid:
+            raise RuntimeError("This message does not have object_guid required for reply()")
+        if not message_id:
+            raise RuntimeError("This message does not have message_id required for reply()")
+
+        return await self._client.send_message(
+            object_guid=object_guid,
+            rnd=str(time.time_ns()),
+            text=text,
+            parse_mode=parse_mode,
+            reply_to_message_id=message_id,
+        )
 
 
 class PeerObject(RawObject):
@@ -175,6 +194,8 @@ class Chat(Object):
             show_ask_spam=data.get("show_ask_spam"),
             auto_delete=data.get("auto_delete"),
         )
+        if result.last_message is not None and getattr(result.last_message, "object_guid", None) is None:
+            setattr(result.last_message, "object_guid", result.object_guid)
         _apply_unknown_fields(result, client, data, result.__dict__.keys())
         return result
 
@@ -407,6 +428,197 @@ class SentMessage(Object):
             message_update=MessageUpdate._parse(client, data.get("message_update")),
             status=data.get("status"),
             chat_update=ChatUpdate._parse(client, data.get("chat_update")),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class NotificationMessageData(RawObject):
+    pass
+
+
+class ShowNotification(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        notification_id: Optional[str] = None,
+        type: Optional[str] = None,
+        title: Optional[str] = None,
+        text: Optional[str] = None,
+        message_data: Optional[NotificationMessageData] = None,
+    ):
+        super().__init__(client)
+        self.notification_id = notification_id
+        self.type = type
+        self.title = title
+        self.text = text
+        self.message_data = message_data
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["ShowNotification"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            notification_id=data.get("notification_id"),
+            type=data.get("type"),
+            title=data.get("title"),
+            text=data.get("text"),
+            message_data=NotificationMessageData._parse(client, data.get("message_data")),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class SocketChatUpdate(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        object_guid: Optional[str] = None,
+        action: Optional[str] = None,
+        chat: Optional[Chat] = None,
+        updated_parameters: Optional[list[str]] = None,
+        timestamp: Optional[str] = None,
+        type: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.object_guid = object_guid
+        self.action = action
+        self.chat = chat
+        self.updated_parameters = updated_parameters or []
+        self.timestamp = timestamp
+        self.type = type
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["SocketChatUpdate"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            object_guid=data.get("object_guid"),
+            action=data.get("action"),
+            chat=Chat._parse(client, data.get("chat")),
+            updated_parameters=data.get("updated_parameters") or [],
+            timestamp=data.get("timestamp"),
+            type=data.get("type"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class SocketMessageUpdate(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        message_id: Optional[str] = None,
+        action: Optional[str] = None,
+        message: Optional[Message] = None,
+        updated_parameters: Optional[list[str]] = None,
+        timestamp: Optional[str] = None,
+        prev_message_id: Optional[str] = None,
+        object_guid: Optional[str] = None,
+        type: Optional[str] = None,
+        state: Optional[str] = None,
+        is_scheduled: Optional[bool] = None,
+    ):
+        super().__init__(client)
+        self.message_id = message_id
+        self.action = action
+        self.message = message
+        self.updated_parameters = updated_parameters or []
+        self.timestamp = timestamp
+        self.prev_message_id = prev_message_id
+        self.object_guid = object_guid
+        self.type = type
+        self.state = state
+        self.is_scheduled = is_scheduled
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["SocketMessageUpdate"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            message_id=data.get("message_id"),
+            action=data.get("action"),
+            message=Message._parse(client, data.get("message")),
+            updated_parameters=data.get("updated_parameters") or [],
+            timestamp=data.get("timestamp"),
+            prev_message_id=data.get("prev_message_id"),
+            object_guid=data.get("object_guid"),
+            type=data.get("type"),
+            state=data.get("state"),
+            is_scheduled=data.get("is_scheduled"),
+        )
+        if result.message is not None:
+            if getattr(result.message, "object_guid", None) is None:
+                setattr(result.message, "object_guid", result.object_guid)
+            if getattr(result.message, "message_id", None) is None:
+                setattr(result.message, "message_id", result.message_id)
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class SocketUpdates(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        chat_updates: Optional[list[SocketChatUpdate]] = None,
+        message_updates: Optional[list[SocketMessageUpdate]] = None,
+        show_notifications: Optional[list[ShowNotification]] = None,
+        user_guid: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.chat_updates = chat_updates or []
+        self.message_updates = message_updates or []
+        self.show_notifications = show_notifications or []
+        self.user_guid = user_guid
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["SocketUpdates"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            chat_updates=[SocketChatUpdate._parse(client, item) for item in data.get("chat_updates", [])],
+            message_updates=[SocketMessageUpdate._parse(client, item) for item in data.get("message_updates", [])],
+            show_notifications=[ShowNotification._parse(client, item) for item in data.get("show_notifications", [])],
+            user_guid=data.get("user_guid"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class ChatsUpdates(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        chats: Optional[list[RawObject]] = None,
+        new_state: Optional[int] = None,
+        status: Optional[str] = None,
+        timestamp: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.chats = chats or []
+        self.new_state = new_state
+        self.status = status
+        self.timestamp = timestamp
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["ChatsUpdates"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            chats=[RawObject._parse(client, item) for item in data.get("chats", [])],
+            new_state=data.get("new_state"),
+            status=data.get("status"),
+            timestamp=data.get("timestamp"),
         )
         _apply_unknown_fields(result, client, data, result.__dict__.keys())
         return result

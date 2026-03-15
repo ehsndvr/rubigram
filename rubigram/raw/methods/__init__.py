@@ -12,6 +12,7 @@ from rubigram.raw.methods.messages import (
     GetHistory,
     GetChat,
 )
+from rubigram.raw.methods.updates import GetChatsUpdates
 from rubigram.raw.methods.users import (
     GetUserInfo,
     GetObjectByUsername,
@@ -32,6 +33,7 @@ __all__ = [
     "GetMessages",
     "GetHistory",
     "GetChat",
+    "GetChatsUpdates",
     "GetUserInfo",
     "GetObjectByUsername",
     "GetAvatars",

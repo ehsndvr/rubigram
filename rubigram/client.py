@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, TypeVar, Union
 
@@ -25,6 +27,7 @@ from rubigram.exceptions import (
     PhoneHashInvalid,
     RegisterDeviceRequired,
     RubikaError,
+    TransportError,
     map_rpc_error,
 )
 from rubigram.network.discovery import DcDiscovery
@@ -37,6 +40,7 @@ from rubigram.raw.methods import (
     EditMessage,
     GetAvatars,
     GetChat,
+    GetChatsUpdates,
     GetContacts,
     GetHistory,
     GetMessages,
@@ -55,11 +59,13 @@ from rubigram.storage.sqlite_storage import SQLiteStorage
 from rubigram.types import (
     Authorization,
     ChatAvatars,
+    ChatsUpdates,
     Empty,
     ObjectByUsername,
     RawObject,
     SentCode,
     SentMessage,
+    SocketUpdates,
     UserInfo,
 )
 from rubigram.utils import generate_device_hash, generate_tmp_session
@@ -149,6 +155,9 @@ class Client:
         self._socket_transport: Optional[SocketTransport] = None
         self._codec: Optional[Codec] = None
         self._is_connected = False
+        self._message_handlers: list[Any] = []
+        self._update_listener_task: Optional[asyncio.Task[None]] = None
+        self._idle_event = asyncio.Event()
 
     def __enter__(self) -> Client:
         asyncio.run(self.start())
@@ -217,6 +226,7 @@ class Client:
             if await self.storage.auth():
                 await self._ensure_socket_handshake()
                 await self._ensure_registered_device()
+                await self._ensure_update_listener()
         except Exception as e:
             print(f"Failed to start client: {e}")
             await self._safe_close()
@@ -229,6 +239,17 @@ class Client:
 
     async def export_session_string(self) -> str:
         return await self.storage.export_session_string()
+
+    def on_message(self):
+        def decorator(func):
+            self._message_handlers.append(func)
+            return func
+
+        return decorator
+
+    async def idle(self) -> None:
+        await self._ensure_update_listener()
+        await self._idle_event.wait()
 
     async def send_code(self, phone_number: str) -> SentCode:
         return await self.invoke(SendCode(phone_number=self._normalize_phone_number(phone_number)))
@@ -299,6 +320,17 @@ class Client:
 
     async def get_avatars(self, object_guid: str) -> ChatAvatars:
         return await self.invoke(GetAvatars(object_guid=object_guid))
+
+    async def get_chats_updates(self, state: Optional[int] = None) -> ChatsUpdates:
+        if state is None:
+            state = await self.storage.updates_state()
+        if state is None:
+            state = int(time.time())
+
+        result = await self.invoke(GetChatsUpdates(state=state))
+        if result.new_state is not None:
+            await self.storage.set_updates_state(result.new_state)
+        return result
 
     async def get_contacts(self, offset: int = 0, limit: int = 100) -> RawObject:
         return await self.invoke(GetContacts(offset=offset, limit=limit))
@@ -421,6 +453,66 @@ class Client:
 
     async def invoke(self, method: RawMethod[ResultT]) -> ResultT:
         return await self._invoke_once(method, allow_register_retry=True)
+
+    async def receive_socket_update(self, timeout: Optional[float] = None) -> SocketUpdates:
+        auth = await self.storage.auth()
+        if not auth:
+            raise LoginRequired("Receiving socket updates requires an authenticated session")
+
+        await self._ensure_socket_handshake()
+        if self._socket_transport is None:
+            raise TransportError("Socket transport is not initialized")
+
+        while True:
+            payload = await self._socket_transport.recv(timeout=timeout)
+            status = payload.get("status")
+            if status == "OK" and "data_enc" not in payload:
+                continue
+
+            if payload.get("type") == "messenger" and "data_enc" in payload:
+                decrypted = self._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+                return SocketUpdates._parse(self, decrypted)
+
+            raise DecodeError(f"Unexpected socket payload shape: {payload}")
+
+    async def _ensure_update_listener(self) -> None:
+        if self._update_listener_task is not None and not self._update_listener_task.done():
+            return
+        if not self.enable_socket_handshake:
+            return
+        if not await self.storage.auth():
+            return
+        self._idle_event.clear()
+        self._update_listener_task = asyncio.create_task(
+            self._update_listener_loop(),
+            name="rubigram-update-listener",
+        )
+
+    async def _update_listener_loop(self) -> None:
+        try:
+            while self._is_connected:
+                update = await self.receive_socket_update()
+                await self._dispatch_socket_update(update)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Update listener stopped because of an exception")
+        finally:
+            self._idle_event.set()
+
+    async def _dispatch_socket_update(self, update: SocketUpdates) -> None:
+        if not self._message_handlers:
+            return
+
+        for message_update in update.message_updates:
+            message = message_update.message
+            if message is None:
+                continue
+
+            for handler in list(self._message_handlers):
+                result = handler(self, message)
+                if inspect.isawaitable(result):
+                    await result
 
     async def _invoke_once(self, method: RawMethod[ResultT], allow_register_retry: bool) -> ResultT:
         if not self._is_connected or self._transport is None or self._codec is None or self._pool is None:
@@ -679,6 +771,15 @@ class Client:
         return str(error)
 
     async def _safe_close(self) -> None:
+        if self._update_listener_task is not None:
+            self._update_listener_task.cancel()
+            try:
+                await self._update_listener_task
+            except asyncio.CancelledError:
+                pass
+            self._update_listener_task = None
+        self._idle_event.set()
+
         if self._socket_transport is not None:
             await self._socket_transport.close()
             self._socket_transport = None

@@ -44,6 +44,7 @@ class FileStorage(SQLiteStorage):
                     public_key TEXT,
                     private_key_pem TEXT,
                     user_guid TEXT,
+                    updates_state INTEGER,
                     device_hash TEXT,
                     registered_device INTEGER,
                     registered_device_version TEXT,
@@ -56,6 +57,8 @@ class FileStorage(SQLiteStorage):
                     self.conn.execute("ALTER TABLE session ADD COLUMN public_key TEXT")
                 if "private_key_pem" not in columns:
                     self.conn.execute("ALTER TABLE session ADD COLUMN private_key_pem TEXT")
+                if "updates_state" not in columns:
+                    self.conn.execute("ALTER TABLE session ADD COLUMN updates_state INTEGER")
                 if "device_hash" not in columns:
                     self.conn.execute("ALTER TABLE session ADD COLUMN device_hash TEXT")
                 if "registered_device" not in columns:

@@ -15,6 +15,7 @@ class StubWebSocket:
         self.sent.append(payload)
 
     async def recv(self):
+        await asyncio.sleep(0)
         if self.responses:
             return self.responses.pop(0)
         return json.dumps({"status": "OK", "status_det": "OK"})
@@ -77,6 +78,27 @@ def test_socket_transport_sends_periodic_empty_heartbeat(monkeypatch):
         await asyncio.sleep(0.03)
 
         assert "{}" in module.websocket.sent
+
+        await transport.close()
+
+    asyncio.run(scenario())
+
+
+def test_socket_transport_queues_incoming_messages(monkeypatch):
+    async def scenario():
+        module = StubWebSocketsModule(
+            responses=[
+                json.dumps({"status": "OK", "status_det": "OK"}),
+                json.dumps({"type": "messenger", "data_enc": "abc"}),
+            ]
+        )
+        monkeypatch.setattr(SocketTransport, "_load_websockets_module", staticmethod(lambda: module))
+
+        transport = SocketTransport(["wss://nsocket10.iranlms.ir:80/"], heartbeat_interval=60)
+        await transport.handshake("auth-1")
+        payload = await transport.recv(timeout=0.1)
+
+        assert payload == {"type": "messenger", "data_enc": "abc"}
 
         await transport.close()
 

@@ -23,6 +23,7 @@ def test_file_and_memory_storage_share_session_string_format():
             await file_storage.set_public_key("public-key")
             await file_storage.set_private_key_pem("private-key")
             await file_storage.set_user_guid("u-test")
+            await file_storage.set_updates_state(1773595460)
             await file_storage.set_device_hash("25010064645373614500053736")
             await file_storage.set_registered_device(True)
             await file_storage.set_registered_device_version("4.4.27")
@@ -40,6 +41,7 @@ def test_file_and_memory_storage_share_session_string_format():
             assert await memory_storage.public_key() == "public-key"
             assert await memory_storage.private_key_pem() == "private-key"
             assert await memory_storage.user_guid() == "u-test"
+            assert await memory_storage.updates_state() == 1773595460
             assert await memory_storage.device_hash() == "25010064645373614500053736"
             assert await memory_storage.registered_device() is True
             assert await memory_storage.registered_device_version() == "4.4.27"

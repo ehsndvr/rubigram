@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS session (
     public_key    TEXT,
     private_key_pem TEXT,
     user_guid     TEXT,
+    updates_state INTEGER,
     device_hash   TEXT,
     registered_device INTEGER,
     registered_device_version TEXT,
@@ -72,10 +73,11 @@ class SQLiteStorage(ABC):
                 INSERT OR IGNORE INTO session (
                     id, api_version, api_url, api_urls_json, storages_json, cdn_urls_json,
                     sockets_json, auth, tmp_session, public_key, private_key_pem, user_guid,
-                    device_hash, registered_device, registered_device_version, created_at, updated_at
+                    updates_state, device_hash, registered_device, registered_device_version, created_at, updated_at
                 ) VALUES (
                     1, ?, NULL, NULL, NULL, NULL,
                     NULL, NULL, NULL, NULL, NULL, NULL,
+                    NULL,
                     NULL, 0, NULL, ?, ?
                 )
                 """,
@@ -176,6 +178,13 @@ class SQLiteStorage(ABC):
     async def set_user_guid(self, value: Optional[str]) -> None:
         self._set_field("user_guid", value)
 
+    async def updates_state(self) -> Optional[int]:
+        value = self._get_field("updates_state")
+        return int(value) if value is not None else None
+
+    async def set_updates_state(self, value: Optional[int]) -> None:
+        self._set_field("updates_state", value)
+
     async def device_hash(self) -> Optional[str]:
         return self._get_field("device_hash")
 
@@ -207,6 +216,7 @@ class SQLiteStorage(ABC):
             "public_key": await self.public_key(),
             "private_key_pem": await self.private_key_pem(),
             "user_guid": await self.user_guid(),
+            "updates_state": await self.updates_state(),
             "device_hash": await self.device_hash(),
             "registered_device": await self.registered_device(),
             "registered_device_version": await self.registered_device_version(),
@@ -241,6 +251,8 @@ class SQLiteStorage(ABC):
             await self.set_private_key_pem(data["private_key_pem"])
         if "user_guid" in data:
             await self.set_user_guid(data["user_guid"])
+        if "updates_state" in data:
+            await self.set_updates_state(data["updates_state"])
         if "device_hash" in data:
             await self.set_device_hash(data["device_hash"])
         if "registered_device" in data:

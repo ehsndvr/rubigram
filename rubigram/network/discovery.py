@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any, Dict, Optional
 
 import httpx
@@ -69,5 +70,7 @@ class DcDiscovery:
             self._client = None
     
     def __del__(self):
-        if self._client is not None:
-            self._client.close()
+        client = self._client
+        if client is not None:
+            with contextlib.suppress(Exception):
+                client._transport.close()
