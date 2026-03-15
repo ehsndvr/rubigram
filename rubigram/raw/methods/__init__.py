@@ -1,0 +1,41 @@
+from rubigram.raw.methods.auth import (
+    RegisterDevice,
+    SendCode,
+    SignIn,
+    SignUp,
+)
+from rubigram.raw.methods.messages import (
+    SendMessage,
+    EditMessage,
+    DeleteMessage,
+    GetMessages,
+    GetHistory,
+    GetChat,
+)
+from rubigram.raw.methods.users import (
+    GetUserInfo,
+    GetObjectByUsername,
+    GetAvatars,
+    BlockUser,
+    UnblockUser,
+    GetContacts,
+)
+
+__all__ = [
+    "SendCode",
+    "SignIn",
+    "SignUp",
+    "RegisterDevice",
+    "SendMessage",
+    "EditMessage",
+    "DeleteMessage",
+    "GetMessages",
+    "GetHistory",
+    "GetChat",
+    "GetUserInfo",
+    "GetObjectByUsername",
+    "GetAvatars",
+    "BlockUser",
+    "UnblockUser",
+    "GetContacts",
+]
