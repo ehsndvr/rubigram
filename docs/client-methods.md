@@ -234,6 +234,42 @@ Notes:
 - `duration_ms` is currently explicit. Rubigram does not yet derive OGG/Opus duration automatically.
 - This upload pipeline is designed to be reused later for `send_photo`, `send_video`, and `send_document`.
 
+### `await app.download_file(file, path=None, *, in_memory=False, file_name=None) -> bytes | Path`
+Downloads media using Rubika `GetFile.ashx` chunked requests.
+
+Accepted input objects:
+- `Message` with `file_inline`
+- `Message` with `sticker.file`
+- `FileInline`
+- `StickerFile`
+- `Sticker`
+
+Behavior:
+- if `in_memory=True`, returns `bytes`
+- otherwise returns the downloaded `Path`
+- if `path` is a directory, Rubigram uses the media file name
+- `progress(current, total, *progress_args)` is called during download
+
+Related bound methods:
+- `await message.download(...)`
+- `await message.file_inline.download(...)`
+- `await message.sticker.download(...)`
+
+### `await app.send_music(object_guid, path, *, duration_ms, rnd=None, mime=None, progress=None, progress_args=()) -> SentMessage`
+Uploads a local audio file and sends it as a `Music` media message.
+
+Notes:
+- current implementation expects `duration_ms` explicitly
+- `progress(current, total, *progress_args)` is called during upload
+
+### `await app.send_video(object_guid, path, *, duration_ms, width, height, rnd=None, mime=None, text=None, is_round=False, is_spoil=False, progress=None, progress_args=()) -> SentMessage`
+Uploads a local video file and sends it as a `Video` media message.
+
+Notes:
+- current implementation expects `duration_ms`, `width`, and `height` explicitly
+- if `text` is provided, it is sent as caption
+- `progress(current, total, *progress_args)` is called during upload
+
 ### `await app.edit_message(object_guid, message_id, text) -> RawObject`
 Current status:
 - implemented

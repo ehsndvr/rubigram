@@ -59,6 +59,23 @@ class ApiUrlPool:
         """Check if a URL exists in the pool."""
         return url in self._urls
 
+    def replace(self, urls: List[str]) -> None:
+        """Replace pool URLs while preserving the current URL when possible."""
+        deduped: List[str] = []
+        for url in urls:
+            if url and url not in deduped:
+                deduped.append(url)
+
+        if not deduped:
+            raise TransportError("No URLs available in the pool")
+
+        current = self.get_current() if self._urls else None
+        self._urls = deduped
+        if current and current in deduped:
+            self._current_index = deduped.index(current)
+        else:
+            self._current_index = 0
+
 
 class RpcTransport:
     """
@@ -102,48 +119,81 @@ class RpcTransport:
         """
         client = await self._get_client()
         body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
-        max_retries = max(0, self._pool.count - 1)
+        last_error: Exception | None = None
 
-        for attempt in range(max_retries + 1):
-            base_url = self._pool.get_current()
-            try:
-                response = await client.post(
-                    base_url + "/",
-                    content=body,
-                )
-                response.raise_for_status()
-                return response.json()
-            except httpx.TimeoutException as e:
-                if attempt == max_retries:
-                    raise NetworkError(
-                        f"Request to {base_url} timed out after {max_retries + 1} attempts",
-                        e,
-                    ) from e
-                self._pool.rotate()
-            except httpx.ConnectError as e:
-                if attempt == max_retries:
-                    raise NetworkError(
-                        f"Failed to connect to {base_url} after {max_retries + 1} attempts",
-                        e,
-                    ) from e
-                self._pool.rotate()
-            except httpx.RequestError as e:
-                if attempt == max_retries:
-                    raise NetworkError(
-                        f"Request to {base_url} failed after {max_retries + 1} attempts",
-                        e,
-                    ) from e
-                self._pool.rotate()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code >= 500:
-                    if attempt < max_retries:
+        for refresh_attempt in range(2):
+            attempt_count = max(1, self._pool.count)
+
+            for attempt in range(attempt_count):
+                base_url = self._pool.get_current()
+                try:
+                    response = await client.post(
+                        base_url + "/",
+                        content=body,
+                    )
+                    response.raise_for_status()
+                    return response.json()
+                except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as e:
+                    last_error = e
+                    if attempt < attempt_count - 1:
                         self._pool.rotate()
                         continue
-                raise TransportError(
-                    f"HTTP error {e.response.status_code}: {e.response.text}"
-                ) from e
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code >= 500:
+                        last_error = e
+                        if attempt < attempt_count - 1:
+                            self._pool.rotate()
+                            continue
+                    else:
+                        raise TransportError(
+                            f"HTTP error {e.response.status_code}: {e.response.text}"
+                        ) from e
+
+                break
+
+            if refresh_attempt == 0 and await self._refresh_pool():
+                continue
+            break
+
+        if isinstance(last_error, httpx.TimeoutException):
+            raise NetworkError(
+                f"Request to {self._pool.get_current()} timed out after trying available API URLs",
+                last_error,
+            ) from last_error
+        if isinstance(last_error, (httpx.ConnectError, httpx.RequestError)):
+            raise NetworkError(
+                f"Request to {self._pool.get_current()} failed after trying available API URLs",
+                last_error,
+            ) from last_error
+        if isinstance(last_error, httpx.HTTPStatusError):
+            raise TransportError(
+                f"HTTP error {last_error.response.status_code}: {last_error.response.text}"
+            ) from last_error
 
         raise TransportError("Unexpected error in send_payload")
+
+    async def _refresh_pool(self) -> bool:
+        try:
+            dc_response = await self._dc_discovery.fetch_dcs()
+        except Exception:
+            return False
+
+        data = dc_response.get("data") or {}
+        urls = data.get("default_api_urls") or []
+        if not urls:
+            return False
+
+        current_urls = list(self._pool.urls)
+        deduped: List[str] = []
+        for url in urls:
+            if url and url not in deduped:
+                deduped.append(url)
+
+        if not deduped or deduped == current_urls:
+            return False
+
+        self._pool.replace(deduped)
+        return True
 
     async def fetch_dcs_plain(self) -> Dict[str, Any]:
         return await self._dc_discovery.fetch_dcs()

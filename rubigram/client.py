@@ -4,13 +4,15 @@ import asyncio
 import inspect
 import logging
 import mimetypes
+import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, Optional, Sequence, TypeVar, Union
 
 from . import crypto, raw
 from . import filters as rubigram_filters
+from .enums import ParseMode
 from rubigram.crypto import (
     AuthSigner,
     AuthUnwrapper,
@@ -36,6 +38,7 @@ from rubigram.network.discovery import DcDiscovery
 from rubigram.network.socket import SocketTransport
 from rubigram.network.transport import ApiUrlPool, RpcTransport
 from rubigram.network.upload import UploadTransport
+from rubigram.network.download import DownloadTransport
 from rubigram.raw.base import RawMethod
 from rubigram.raw.methods import (
     BlockUser,
@@ -65,6 +68,7 @@ from rubigram.types import (
     ChatAvatars,
     ChatsUpdates,
     Empty,
+    MessageEntity,
     ObjectByUsername,
     RawObject,
     SentCode,
@@ -165,6 +169,7 @@ class Client:
         self._pool: Optional[ApiUrlPool] = None
         self._transport: Optional[RpcTransport] = None
         self._upload_transport: Optional[UploadTransport] = None
+        self._download_transport: Optional[DownloadTransport] = None
         self._socket_transport: Optional[SocketTransport] = None
         self._codec: Optional[Codec] = None
         self._is_connected = False
@@ -234,6 +239,7 @@ class Client:
                 timeout=self.timeout,
             )
             self._upload_transport = UploadTransport(timeout=max(self.timeout, 60.0))
+            self._download_transport = DownloadTransport(timeout=max(self.timeout, 60.0))
             self._is_connected = True
             if not await self.storage.auth() and self._should_interactive_authorize():
                 await self.authorize()
@@ -368,17 +374,20 @@ class Client:
         object_guid: str,
         rnd: str,
         text: Optional[str] = None,
-        parse_mode: Optional[str] = None,
+        parse_mode: Optional[str | ParseMode] = None,
         reply_to_message_id: Optional[str] = None,
         file_inline: Optional[Dict[str, Any]] = None,
+        entities: Optional[Sequence[MessageEntity]] = None,
     ) -> SentMessage:
+        resolved_text, metadata = self._build_message_metadata(text, entities=entities, parse_mode=parse_mode)
         return await self.invoke(
             SendMessage(
                 object_guid=object_guid,
                 rnd=rnd,
-                text=text,
+                text=resolved_text,
                 file_inline=file_inline,
-                parse_mode=parse_mode,
+                metadata=metadata,
+                parse_mode=None,
                 reply_to_message_id=reply_to_message_id,
             )
         )
@@ -391,29 +400,113 @@ class Client:
         rnd: Optional[str] = None,
         duration_ms: float | int = 0,
         mime: Optional[str] = None,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
     ) -> SentMessage:
         file_path = Path(path)
-        file_name = file_path.name
-        file_size = file_path.stat().st_size
-        file_mime = mime or self._guess_upload_mime(file_path)
-        descriptor = await self.request_send_file(file_name=file_name, size=file_size, mime=file_mime)
-        uploaded = await self._upload_file(path=file_path, descriptor=descriptor)
-
-        file_inline = {
-            "file_name": file_name,
-            "time": duration_ms,
-            "size": file_size,
-            "type": "Voice",
-            "dc_id": uploaded.dc_id,
-            "file_id": uploaded.id,
-            "mime": file_mime,
-            "access_hash_rec": uploaded.access_hash_rec,
-        }
-
-        return await self.send_message(
+        resolved_duration_ms = self._resolve_voice_duration_ms(file_path, duration_ms)
+        return await self._send_uploaded_media(
             object_guid=object_guid,
-            rnd=rnd or str(time.time_ns()),
-            file_inline=file_inline,
+            path=file_path,
+            rnd=rnd,
+            mime=mime,
+            media_type="Voice",
+            progress=progress,
+            progress_args=progress_args,
+            extra_file_inline={"time": resolved_duration_ms},
+        )
+
+    async def send_music(
+        self,
+        object_guid: str,
+        path: str | Path,
+        *,
+        duration_ms: float | int,
+        rnd: Optional[str] = None,
+        mime: Optional[str] = None,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> SentMessage:
+        return await self._send_uploaded_media(
+            object_guid=object_guid,
+            path=path,
+            rnd=rnd,
+            mime=mime,
+            media_type="Music",
+            progress=progress,
+            progress_args=progress_args,
+            extra_file_inline={"time": duration_ms},
+        )
+
+    async def send_video(
+        self,
+        object_guid: str,
+        path: str | Path,
+        *,
+        duration_ms: float | int,
+        width: int,
+        height: int,
+        rnd: Optional[str] = None,
+        mime: Optional[str] = None,
+        text: Optional[str] = None,
+        is_round: bool = False,
+        is_spoil: bool = False,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> SentMessage:
+        return await self._send_uploaded_media(
+            object_guid=object_guid,
+            path=path,
+            rnd=rnd,
+            mime=mime,
+            media_type="Video",
+            text=text,
+            progress=progress,
+            progress_args=progress_args,
+            extra_file_inline={
+                "time": duration_ms,
+                "width": width,
+                "height": height,
+                "is_round": is_round,
+                "is_spoil": is_spoil,
+            },
+        )
+
+    async def download_file(
+        self,
+        file: Any,
+        path: str | Path | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> bytes | Path:
+        if self._download_transport is None:
+            raise TransportError("Download transport is not initialized")
+
+        auth = await self.storage.auth()
+        if not auth:
+            raise LoginRequired("Downloading files requires an authenticated session")
+
+        target = self._resolve_download_target(file)
+        target_name = file_name or getattr(target, "file_name", None) or f"file_{getattr(target, 'file_id', 'unknown')}"
+
+        if in_memory:
+            destination = None
+        else:
+            destination = self._resolve_download_destination(path, target_name)
+
+        return await self._download_transport.download_file(
+            auth=auth,
+            file_id=getattr(target, "file_id"),
+            dc_id=getattr(target, "dc_id"),
+            access_hash_rec=getattr(target, "access_hash_rec"),
+            file_size=self._coerce_download_size(getattr(target, "size", None)),
+            path=destination,
+            in_memory=in_memory,
+            progress=progress,
+            progress_args=progress_args,
         )
 
     async def edit_message(self, object_guid: str, message_id: str, text: str) -> RawObject:
@@ -545,8 +638,15 @@ class Client:
     async def _update_listener_loop(self) -> None:
         try:
             while self._is_connected:
-                update = await self.receive_socket_update()
-                await self._dispatch_socket_update(update)
+                try:
+                    update = await self.receive_socket_update()
+                    await self._dispatch_socket_update(update)
+                except asyncio.CancelledError:
+                    raise
+                except (TransportError, NetworkError, DecodeError) as exc:
+                    log.warning("Update listener recovered after socket/read error: %s", exc)
+                    await asyncio.sleep(1)
+                    continue
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -564,15 +664,18 @@ class Client:
                 continue
 
             for handler in list(self._message_handlers):
-                passed = handler.filter(self, message)
-                if inspect.isawaitable(passed):
-                    passed = await passed
-                if not passed:
-                    continue
+                try:
+                    passed = handler.filter(self, message)
+                    if inspect.isawaitable(passed):
+                        passed = await passed
+                    if not passed:
+                        continue
 
-                result = handler.callback(self, message)
-                if inspect.isawaitable(result):
-                    await result
+                    result = handler.callback(self, message)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    log.exception("Message handler failed")
 
     async def _invoke_once(self, method: RawMethod[ResultT], allow_register_retry: bool) -> ResultT:
         if not self._is_connected or self._transport is None or self._codec is None or self._pool is None:
@@ -627,23 +730,261 @@ class Client:
 
         return method.parse_response(self, result)
 
-    async def _upload_file(self, *, path: str | Path, descriptor: UploadDescriptor) -> UploadDescriptor:
+    async def _send_uploaded_media(
+        self,
+        *,
+        object_guid: str,
+        path: str | Path,
+        media_type: str,
+        rnd: Optional[str] = None,
+        mime: Optional[str] = None,
+        text: Optional[str] = None,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+        extra_file_inline: Optional[Dict[str, Any]] = None,
+    ) -> SentMessage:
+        file_path = Path(path)
+        file_name = file_path.name
+        file_size = file_path.stat().st_size
+        file_mime = mime or self._guess_upload_mime(file_path)
+        descriptor = await self.request_send_file(file_name=file_name, size=file_size, mime=file_mime)
+        uploaded = await self._upload_file(
+            path=file_path,
+            descriptor=descriptor,
+            progress=progress,
+            progress_args=progress_args,
+        )
+
+        file_inline: Dict[str, Any] = {
+            "file_name": file_name,
+            "size": file_size,
+            "type": media_type,
+            "dc_id": uploaded.dc_id,
+            "file_id": uploaded.id,
+            "mime": file_mime,
+            "access_hash_rec": uploaded.access_hash_rec,
+        }
+        if extra_file_inline:
+            file_inline.update(extra_file_inline)
+
+        return await self.send_message(
+            object_guid=object_guid,
+            rnd=rnd or str(time.time_ns()),
+            text=text,
+            file_inline=file_inline,
+        )
+
+    async def _upload_file(
+        self,
+        *,
+        path: str | Path,
+        descriptor: UploadDescriptor,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> UploadDescriptor:
         if self._upload_transport is None:
             raise TransportError("Upload transport is not initialized")
         auth = await self.storage.auth()
         if not auth:
             raise LoginRequired("Uploading files requires an authenticated session")
-        return await self._upload_transport.upload_file(auth=auth, descriptor=descriptor, path=path)
+        return await self._upload_transport.upload_file(
+            auth=auth,
+            descriptor=descriptor,
+            path=path,
+            progress=progress,
+            progress_args=progress_args,
+        )
+
+    def _build_message_metadata(
+        self,
+        text: Optional[str],
+        *,
+        entities: Optional[Sequence[MessageEntity]],
+        parse_mode: Optional[str | ParseMode],
+    ) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+        if text is None:
+            if entities:
+                raise ValueError("entities require a text message")
+            return None, None
+
+        if entities and parse_mode is not None:
+            raise ValueError("Use either entities or parse_mode, not both")
+
+        if entities:
+            return text, self._metadata_from_entities(entities)
+
+        if parse_mode is None:
+            return text, None
+
+        normalized = self._normalize_parse_mode(parse_mode)
+        if normalized == ParseMode.MARKDOWN:
+            return self._parse_markdown_entities(text)
+        if normalized == ParseMode.HTML:
+            return self._parse_html_entities(text)
+        return text, None
+
+    def _normalize_parse_mode(self, parse_mode: str | ParseMode) -> ParseMode:
+        if isinstance(parse_mode, ParseMode):
+            return parse_mode
+        value = str(parse_mode).strip().lower()
+        if value in {"markdown", "md"}:
+            return ParseMode.MARKDOWN
+        if value == "html":
+            return ParseMode.HTML
+        if value in {"default", "none"}:
+            return ParseMode.DEFAULT
+        raise ValueError(f"Unsupported parse_mode: {parse_mode}")
+
+    def _metadata_from_entities(self, entities: Sequence[MessageEntity]) -> Optional[Dict[str, Any]]:
+        if not entities:
+            return None
+        return {"meta_data_parts": [entity.to_metadata_part() for entity in entities]}
+
+    def _parse_markdown_entities(self, text: str) -> tuple[str, Optional[Dict[str, Any]]]:
+        pattern = re.compile(r"\*\*(.+?)\*\*")
+        return self._extract_entities_from_pattern(text, pattern, lambda match: MessageEntity.bold(match[0], match[1]))
+
+    def _parse_html_entities(self, text: str) -> tuple[str, Optional[Dict[str, Any]]]:
+        pattern = re.compile(r"<(b|strong)>(.*?)</\1>", re.IGNORECASE | re.DOTALL)
+        return self._extract_entities_from_pattern(text, pattern, lambda match: MessageEntity.bold(match[0], match[1]))
+
+    def _extract_entities_from_pattern(
+        self,
+        text: str,
+        pattern: re.Pattern[str],
+        entity_builder: Callable[[tuple[int, int]], MessageEntity],
+    ) -> tuple[str, Optional[Dict[str, Any]]]:
+        entities: list[MessageEntity] = []
+        parts: list[str] = []
+        cursor = 0
+        plain_length = 0
+
+        for match in pattern.finditer(text):
+            start, end = match.span()
+            parts.append(text[cursor:start])
+            plain_length += len(text[cursor:start])
+            inner_text = match.group(match.lastindex or 1)
+            parts.append(inner_text)
+            entities.append(entity_builder((plain_length, len(inner_text))))
+            plain_length += len(inner_text)
+            cursor = end
+
+        parts.append(text[cursor:])
+        plain_text = "".join(parts)
+        return plain_text, self._metadata_from_entities(entities)
+
+    def _resolve_download_target(self, file: Any) -> Any:
+        if hasattr(file, "file_id") and hasattr(file, "dc_id") and hasattr(file, "access_hash_rec"):
+            return file
+
+        if getattr(file, "file_inline", None) is not None:
+            return file.file_inline
+
+        if getattr(file, "sticker", None) is not None and getattr(file.sticker, "file", None) is not None:
+            return file.sticker.file
+
+        raise ValueError("The provided object does not contain downloadable file metadata")
+
+    def _resolve_download_destination(self, path: str | Path | None, file_name: str) -> Path:
+        if path is None:
+            return Path(file_name)
+
+        destination = Path(path)
+        if destination.exists() and destination.is_dir():
+            return destination / file_name
+        if str(path).endswith(("/", "\\\\")):
+            return destination / file_name
+        if destination.suffix:
+            return destination
+        return destination / file_name
+
+    def _coerce_download_size(self, value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _guess_upload_mime(self, path: Path) -> str:
         guessed, _ = mimetypes.guess_type(path.name)
         if guessed:
             suffix = path.suffix.lower().lstrip(".")
-            if suffix in {"ogg", "mp4", "jpg", "jpeg", "png", "zip"}:
+            if suffix in {"ogg", "mp4", "jpg", "jpeg", "png", "zip", "mp3"}:
                 return "jpg" if suffix == "jpeg" else suffix
             return guessed
         suffix = path.suffix.lower().lstrip(".")
         return suffix or "bin"
+
+    def _resolve_voice_duration_ms(self, path: Path, duration_ms: float | int) -> float | int:
+        try:
+            if float(duration_ms) > 0:
+                return duration_ms
+        except (TypeError, ValueError):
+            pass
+
+        if path.suffix.lower() == ".ogg":
+            parsed = self._parse_ogg_opus_duration_ms(path)
+            if parsed > 0:
+                return parsed
+
+        raise ValueError(
+            "Voice duration could not be determined from the file. "
+            "Pass duration_ms explicitly."
+        )
+
+    def _parse_ogg_opus_duration_ms(self, path: Path) -> float:
+        data = path.read_bytes()
+        offset = 0
+        pre_skip = 0
+        found_opus_head = False
+        last_granule_position: Optional[int] = None
+
+        while offset + 27 <= len(data):
+            capture = data[offset:offset + 4]
+            if capture != b"OggS":
+                next_offset = data.find(b"OggS", offset + 1)
+                if next_offset < 0:
+                    break
+                offset = next_offset
+                continue
+
+            page_segments = data[offset + 26]
+            header_size = 27 + page_segments
+            if offset + header_size > len(data):
+                break
+
+            segment_table = data[offset + 27:offset + header_size]
+            payload_size = sum(segment_table)
+            page_end = offset + header_size + payload_size
+            if page_end > len(data):
+                break
+
+            granule_position = int.from_bytes(data[offset + 6:offset + 14], "little", signed=False)
+            if granule_position:
+                last_granule_position = granule_position
+
+            payload = data[offset + header_size:page_end]
+            payload_offset = 0
+            packet = bytearray()
+
+            for segment_length in segment_table:
+                packet.extend(payload[payload_offset:payload_offset + segment_length])
+                payload_offset += segment_length
+
+                if segment_length < 255:
+                    if not found_opus_head and packet.startswith(b"OpusHead") and len(packet) >= 12:
+                        pre_skip = int.from_bytes(packet[10:12], "little", signed=False)
+                        found_opus_head = True
+                    packet.clear()
+
+            offset = page_end
+
+        if not found_opus_head or last_granule_position is None:
+            return 0.0
+
+        duration_ms = max(0, last_granule_position - pre_skip) * 1000.0 / 48000.0
+        return round(duration_ms, 3)
 
     def _build_data_object(self, method: RawMethod) -> dict[str, Any]:
         input_data = method.to_input()

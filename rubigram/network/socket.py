@@ -34,6 +34,7 @@ class SocketTransport:
         self._heartbeat_task: Optional[asyncio.Task[None]] = None
         self._reader_task: Optional[asyncio.Task[None]] = None
         self._incoming_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._disconnect_marker = {"_socket_disconnected": True}
 
     @staticmethod
     def _normalize_url(url: str) -> str:
@@ -184,8 +185,13 @@ class SocketTransport:
             raise TransportError("Socket connection is not active")
 
         if timeout is None:
-            return await self._incoming_queue.get()
-        return await asyncio.wait_for(self._incoming_queue.get(), timeout=timeout)
+            payload = await self._incoming_queue.get()
+        else:
+            payload = await asyncio.wait_for(self._incoming_queue.get(), timeout=timeout)
+
+        if payload.get("_socket_disconnected"):
+            raise TransportError("Socket connection dropped")
+        return payload
 
     async def _drop_connection(self) -> None:
         websocket = self._websocket
@@ -207,7 +213,10 @@ class SocketTransport:
             with contextlib.suppress(asyncio.CancelledError):
                 await reader_task
 
+        old_queue = self._incoming_queue
         self._incoming_queue = asyncio.Queue()
+        with contextlib.suppress(asyncio.QueueFull):
+            old_queue.put_nowait(self._disconnect_marker)
 
         if websocket is not None:
             with contextlib.suppress(Exception):

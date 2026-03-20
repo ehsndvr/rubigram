@@ -1,4 +1,5 @@
 from .object import Object
+from .formatting import MessageEntity
 from .results import (
     Authorization,
     Avatar,
@@ -36,6 +37,7 @@ from .results import (
 
 __all__ = [
     "Object",
+    "MessageEntity",
     "RawObject",
     "Empty",
     "OnlineTime",

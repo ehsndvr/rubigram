@@ -1,14 +1,28 @@
 from __future__ import annotations
 
+import inspect
 import math
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import httpx
 
 from rubigram.exceptions import NetworkError, TransportError, map_rpc_error
 from rubigram.network.headers import build_upload_headers
 from rubigram.types import UploadDescriptor
+
+
+async def _report_progress(
+    progress: Optional[Callable[..., Any]],
+    current: int,
+    total: int,
+    progress_args: tuple[Any, ...],
+) -> None:
+    if progress is None:
+        return
+    result = progress(current, total, *progress_args)
+    if inspect.isawaitable(result):
+        await result
 
 
 class UploadTransport:
@@ -34,6 +48,8 @@ class UploadTransport:
         auth: str,
         descriptor: UploadDescriptor,
         path: str | Path,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
     ) -> UploadDescriptor:
         if not auth:
             raise TransportError("Uploading a file requires auth")
@@ -85,6 +101,8 @@ class UploadTransport:
             data_payload = payload.get("data") or {}
             if data_payload.get("access_hash_rec"):
                 access_hash_rec = data_payload["access_hash_rec"]
+
+            await _report_progress(progress, end, len(data), progress_args)
 
         return UploadDescriptor(
             client=descriptor._client,

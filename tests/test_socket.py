@@ -103,3 +103,32 @@ def test_socket_transport_queues_incoming_messages(monkeypatch):
         await transport.close()
 
     asyncio.run(scenario())
+
+
+
+def test_socket_transport_recv_raises_when_connection_drops(monkeypatch):
+    async def scenario():
+        module = StubWebSocketsModule(
+            responses=[
+                json.dumps({"status": "OK", "status_det": "OK"}),
+            ]
+        )
+        monkeypatch.setattr(SocketTransport, "_load_websockets_module", staticmethod(lambda: module))
+
+        transport = SocketTransport(["wss://nsocket10.iranlms.ir:80/"], heartbeat_interval=60)
+        await transport.handshake("auth-1")
+        transport._cancel_reader()
+        transport._incoming_queue = asyncio.Queue()
+
+        waiter = asyncio.create_task(transport.recv())
+        await asyncio.sleep(0)
+        await transport._drop_connection()
+
+        try:
+            await waiter
+        except Exception as exc:
+            assert str(exc) == "Socket connection dropped"
+        else:
+            raise AssertionError("Expected recv to fail after drop")
+
+    asyncio.run(scenario())

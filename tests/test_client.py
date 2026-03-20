@@ -671,6 +671,50 @@ def test_on_message_dispatches_message_handlers(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_on_message_handler_exception_does_not_stop_dispatch(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+
+        seen = []
+
+        @client.on_message()
+        async def broken_handler(app, message):
+            raise RuntimeError("boom")
+
+        @client.on_message()
+        async def healthy_handler(app, message):
+            seen.append(message.text)
+
+        update = client_module.SocketUpdates._parse(
+            client,
+            {
+                "message_updates": [
+                    {
+                        "message_id": "1",
+                        "action": "New",
+                        "object_guid": "u123",
+                        "message": {
+                            "message_id": "1",
+                            "text": "hello",
+                            "author_object_guid": "u123",
+                            "type": "Text",
+                        },
+                    }
+                ]
+            },
+        )
+
+        await client._dispatch_socket_update(update)
+
+        assert seen == ["hello"]
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
 def test_message_reply_uses_send_message_with_reply_to(monkeypatch):
     async def scenario():
         monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
@@ -891,6 +935,36 @@ def test_request_send_file_returns_typed_descriptor(monkeypatch):
     asyncio.run(scenario())
 
 
+def build_test_ogg_opus(duration_ms: int) -> bytes:
+    sample_count = int(duration_ms * 48)
+
+    def ogg_page(granule_position: int, sequence: int, packet: bytes) -> bytes:
+        segments = []
+        remaining = len(packet)
+        if remaining == 0:
+            segments.append(0)
+        else:
+            while remaining >= 255:
+                segments.append(255)
+                remaining -= 255
+            segments.append(remaining)
+
+        header = (
+            b"OggS"
+            + bytes([0, 0])
+            + granule_position.to_bytes(8, "little", signed=False)
+            + (1).to_bytes(4, "little", signed=False)
+            + sequence.to_bytes(4, "little", signed=False)
+            + (0).to_bytes(4, "little", signed=False)
+            + bytes([len(segments)])
+        )
+        return header + bytes(segments) + packet
+
+    opus_head = b"OpusHead" + bytes([1, 1]) + (0).to_bytes(2, "little") + (48000).to_bytes(4, "little") + (0).to_bytes(2, "little", signed=True) + bytes([0])
+    audio_packet = b"voice-payload"
+    return ogg_page(0, 0, opus_head) + ogg_page(sample_count, 1, audio_packet)
+
+
 def test_send_voice_uploads_and_sends_file_inline(monkeypatch):
     async def scenario():
         monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
@@ -901,7 +975,7 @@ def test_send_voice_uploads_and_sends_file_inline(monkeypatch):
         temp_path = Path.cwd() / f"_voice_{uuid.uuid4().hex}.ogg"
         temp_path.write_bytes(b"OggS-test")
 
-        async def upload_file(self, *, auth, descriptor, path):
+        async def upload_file(self, *, auth, descriptor, path, progress=None, progress_args=()):
             assert auth == "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb"
             assert descriptor.id == "87998036915657"
             assert Path(path) == temp_path
@@ -1030,6 +1104,439 @@ def test_send_voice_uploads_and_sends_file_inline(monkeypatch):
         assert result.chat_update.object_guid == "u123"
 
         temp_path.unlink(missing_ok=True)
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_send_voice_derives_duration_from_ogg_opus(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        temp_path = Path.cwd() / f"_voice_auto_{uuid.uuid4().hex}.ogg"
+        temp_path.write_bytes(build_test_ogg_opus(720))
+
+        async def upload_file(self, *, auth, descriptor, path, progress=None, progress_args=()):
+            return client_module.UploadDescriptor(
+                id=descriptor.id,
+                dc_id=descriptor.dc_id,
+                access_hash_send=descriptor.access_hash_send,
+                access_hash_rec="1827275907694936106542107050922026031521",
+                upload_url=descriptor.upload_url,
+            )
+
+        monkeypatch.setattr(client_module.UploadTransport, "upload_file", upload_file)
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            method = decrypted_request["method"]
+
+            if method == "requestSendFile":
+                return encrypt_response(
+                    {
+                        "status": "OK",
+                        "status_det": "OK",
+                        "data": {
+                            "id": "87998036915657",
+                            "dc_id": "491",
+                            "access_hash_send": "euthauxjfybzjbaaymlitbhpio8651",
+                            "upload_url": "https://upmessenger491.iranlms.ir/UploadFile.ashx",
+                        },
+                    },
+                    auth,
+                )
+
+            if method == "sendMessage":
+                assert decrypted_request["input"]["file_inline"]["time"] == 720.0
+                return encrypt_response(
+                    {
+                        "status": "OK",
+                        "status_det": "OK",
+                        "data": {
+                            "message_update": {
+                                "message_id": "1556497285304832",
+                                "action": "New",
+                                "message": {
+                                    "message_id": "1556497285304832",
+                                    "file_inline": {
+                                        "file_id": 87998036915657,
+                                        "mime": "ogg",
+                                        "dc_id": 491,
+                                        "access_hash_rec": "1827275907694936106542107050922026031521",
+                                        "file_name": temp_path.name,
+                                        "time": 720.0,
+                                        "size": temp_path.stat().st_size,
+                                        "type": "Voice",
+                                    },
+                                    "time": "1773599154",
+                                    "is_edited": False,
+                                    "type": "FileInline",
+                                    "author_type": "User",
+                                    "author_object_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                                    "allow_transcription": False,
+                                },
+                                "updated_parameters": [],
+                                "timestamp": "1773599154",
+                                "prev_message_id": "1556479276978832",
+                                "object_guid": "u123",
+                                "type": "User",
+                                "state": "1773599094",
+                                "is_scheduled": False,
+                            },
+                            "status": "OK",
+                            "chat_update": {
+                                "object_guid": "u123",
+                                "action": "Edit",
+                                "chat": {
+                                    "time_string": "177359915400001556497285304832",
+                                    "last_message": {
+                                        "message_id": "1556497285304832",
+                                        "type": "Other",
+                                        "text": "voice",
+                                        "author_object_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                                        "is_mine": True,
+                                        "author_title": "me",
+                                        "author_type": "User",
+                                    },
+                                    "last_seen_peer_mid": "1556482278263832",
+                                    "status": "Active",
+                                    "time": 1773599154,
+                                    "last_message_id": "1556497285304832",
+                                },
+                                "updated_parameters": [
+                                    "last_message_id",
+                                    "last_message",
+                                    "status",
+                                    "time_string",
+                                    "last_seen_peer_mid",
+                                    "time",
+                                ],
+                                "timestamp": "1773599154",
+                                "type": "User",
+                            },
+                        },
+                    },
+                    auth,
+                )
+
+            raise AssertionError(f"Unexpected method: {method}")
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.send_voice("u123", temp_path)
+
+        assert result.message_update.message.file_inline.type == "Voice"
+
+        temp_path.unlink(missing_ok=True)
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+
+def test_client_download_file_in_memory(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        async def fake_download_file(self, **kwargs):
+            assert kwargs["auth"] == "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb"
+            assert kwargs["file_id"] == 87996041918445
+            assert kwargs["dc_id"] == 435
+            assert kwargs["access_hash_rec"] == "6704352162326267560942489985562026031521"
+            assert kwargs["file_size"] == 7788
+            assert kwargs["in_memory"] is True
+            return b"voice-bytes"
+
+        monkeypatch.setattr(client_module.DownloadTransport, "download_file", fake_download_file)
+
+        message = Message._parse(
+            client,
+            {
+                "message_id": "1",
+                "type": "FileInline",
+                "file_inline": {
+                    "file_id": 87996041918445,
+                    "mime": "ogg",
+                    "dc_id": 435,
+                    "access_hash_rec": "6704352162326267560942489985562026031521",
+                    "file_name": "voice.ogg",
+                    "time": 1000,
+                    "size": 7788,
+                    "type": "Voice",
+                },
+            },
+        )
+
+        result = await client.download_file(message, in_memory=True)
+
+        assert result == b"voice-bytes"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_message_download_uses_bound_client(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        target = Path.cwd() / f"_downloads_{uuid.uuid4().hex}"
+
+        async def fake_download_file(self, file, path=None, in_memory=False, file_name=None, progress=None, progress_args=()):
+            assert getattr(file.file_inline, "file_name", None) == "voice.ogg"
+            assert path == target
+            assert in_memory is False
+            output = target / "voice.ogg"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"voice-bytes")
+            return output
+
+        monkeypatch.setattr(Client, "download_file", fake_download_file)
+
+        message = client_module.SocketUpdates._parse(
+            client,
+            {
+                "message_updates": [
+                    {
+                        "message_id": "1",
+                        "action": "New",
+                        "object_guid": "u123",
+                        "message": {
+                            "message_id": "1",
+                            "type": "FileInline",
+                            "file_inline": {
+                                "file_id": 87996041918445,
+                                "mime": "ogg",
+                                "dc_id": 435,
+                                "access_hash_rec": "6704352162326267560942489985562026031521",
+                                "file_name": "voice.ogg",
+                                "time": 1000,
+                                "size": 7788,
+                                "type": "Voice",
+                            },
+                        },
+                    }
+                ]
+            },
+        ).message_updates[0].message
+
+        result = await message.download(path=target)
+
+        assert result.read_bytes() == b"voice-bytes"
+        result.unlink(missing_ok=True)
+        target.rmdir()
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+
+def test_send_music_uploads_and_sends_file_inline(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        temp_path = Path.cwd() / f"_music_{uuid.uuid4().hex}.mp3"
+        temp_path.write_bytes(b"MP3DATA")
+        progress_calls = []
+
+        async def upload_file(self, *, auth, descriptor, path, progress=None, progress_args=()):
+            if progress is not None:
+                result = progress(7, 7, *progress_args)
+                if asyncio.iscoroutine(result):
+                    await result
+            return client_module.UploadDescriptor(
+                id=descriptor.id,
+                dc_id=descriptor.dc_id,
+                access_hash_send=descriptor.access_hash_send,
+                access_hash_rec="rec-music",
+                upload_url=descriptor.upload_url,
+            )
+
+        monkeypatch.setattr(client_module.UploadTransport, "upload_file", upload_file)
+
+        def progress(current, total, label):
+            progress_calls.append((current, total, label))
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            method = decrypted_request["method"]
+            if method == "requestSendFile":
+                return encrypt_response(
+                    {
+                        "status": "OK",
+                        "status_det": "OK",
+                        "data": {
+                            "id": "88001038289473",
+                            "dc_id": "408",
+                            "access_hash_send": "zaweshaqbsahhnmqtsobujloqr8651",
+                            "upload_url": "https://upmessenger408.iranlms.ir/UploadFile.ashx",
+                        },
+                    },
+                    auth,
+                )
+            if method == "sendMessage":
+                assert decrypted_request["input"]["file_inline"] == {
+                    "file_name": temp_path.name,
+                    "size": temp_path.stat().st_size,
+                    "type": "Music",
+                    "dc_id": "408",
+                    "file_id": "88001038289473",
+                    "mime": "mp3",
+                    "access_hash_rec": "rec-music",
+                    "time": 1000,
+                }
+                return encrypt_response({"status": "OK", "status_det": "OK", "data": {}}, auth)
+            raise AssertionError(f"Unexpected method: {method}")
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        await client.send_music("u123", temp_path, duration_ms=1000, progress=progress, progress_args=("music",))
+
+        assert progress_calls == [(7, 7, "music")]
+        temp_path.unlink(missing_ok=True)
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_send_video_uploads_and_sends_file_inline(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        temp_path = Path.cwd() / f"_video_{uuid.uuid4().hex}.mp4"
+        temp_path.write_bytes(b"MP4DATA")
+
+        async def upload_file(self, *, auth, descriptor, path, progress=None, progress_args=()):
+            return client_module.UploadDescriptor(
+                id=descriptor.id,
+                dc_id=descriptor.dc_id,
+                access_hash_send=descriptor.access_hash_send,
+                access_hash_rec="rec-video",
+                upload_url=descriptor.upload_url,
+            )
+
+        monkeypatch.setattr(client_module.UploadTransport, "upload_file", upload_file)
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            method = decrypted_request["method"]
+            if method == "requestSendFile":
+                return encrypt_response(
+                    {
+                        "status": "OK",
+                        "status_det": "OK",
+                        "data": {
+                            "id": "88001038289474",
+                            "dc_id": "409",
+                            "access_hash_send": "video-send-hash",
+                            "upload_url": "https://upmessenger409.iranlms.ir/UploadFile.ashx",
+                        },
+                    },
+                    auth,
+                )
+            if method == "sendMessage":
+                assert decrypted_request["input"]["text"] == "caption"
+                assert decrypted_request["input"]["file_inline"] == {
+                    "file_name": temp_path.name,
+                    "size": temp_path.stat().st_size,
+                    "type": "Video",
+                    "dc_id": "409",
+                    "file_id": "88001038289474",
+                    "mime": "mp4",
+                    "access_hash_rec": "rec-video",
+                    "time": 2000,
+                    "width": 480,
+                    "height": 852,
+                    "is_round": False,
+                    "is_spoil": False,
+                }
+                return encrypt_response({"status": "OK", "status_det": "OK", "data": {}}, auth)
+            raise AssertionError(f"Unexpected method: {method}")
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        await client.send_video("u123", temp_path, duration_ms=2000, width=480, height=852, text="caption")
+
+        temp_path.unlink(missing_ok=True)
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+
+def test_update_listener_recovers_after_transport_error(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb")
+
+        seen = []
+
+        @client.on_message()
+        async def handler(app, message):
+            seen.append(message.text)
+            app._is_connected = False
+
+        calls = {"recv": 0}
+
+        class StubSocketTransport:
+            async def handshake(self, auth, api_version="5", force_reconnect=False):
+                return {"status": "OK", "status_det": "OK"}
+
+            async def recv(self, timeout=None):
+                calls["recv"] += 1
+                if calls["recv"] == 1:
+                    raise client_module.TransportError("Socket connection dropped")
+                return {
+                    "type": "messenger",
+                    "data_enc": encrypt_aes_cbc(
+                        {
+                            "chat_updates": [],
+                            "message_updates": [
+                                {
+                                    "message_id": "1",
+                                    "action": "New",
+                                    "message": {"message_id": "1", "text": "hello", "type": "Text"},
+                                    "object_guid": "u1",
+                                    "state": "1",
+                                }
+                            ],
+                            "show_notifications": [],
+                            "user_guid": "u0",
+                        },
+                        "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb",
+                    ),
+                }
+
+            async def close(self):
+                return None
+
+        client._socket_transport = StubSocketTransport()  # type: ignore[assignment]
+        task = asyncio.create_task(client._update_listener_loop())
+        await asyncio.wait_for(task, timeout=2)
+
+        assert seen == ["hello"]
+
         await client.stop()
 
     asyncio.run(scenario())

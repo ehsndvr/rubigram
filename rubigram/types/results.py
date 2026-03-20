@@ -88,11 +88,47 @@ class ForwardedFrom(RawObject):
 
 
 class FileInline(RawObject):
-    pass
+    async def download(
+        self,
+        path: str | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Any:
+        if self._client is None:
+            raise RuntimeError("This file is not bound to a Client instance")
+        return await self._client.download_file(
+            self,
+            path=path,
+            in_memory=in_memory,
+            file_name=file_name,
+            progress=progress,
+            progress_args=progress_args,
+        )
 
 
 class StickerFile(RawObject):
-    pass
+    async def download(
+        self,
+        path: str | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Any:
+        if self._client is None:
+            raise RuntimeError("This file is not bound to a Client instance")
+        return await self._client.download_file(
+            self,
+            path=path,
+            in_memory=in_memory,
+            file_name=file_name,
+            progress=progress,
+            progress_args=progress_args,
+        )
 
 
 class Sticker(RawObject):
@@ -102,6 +138,25 @@ class Sticker(RawObject):
         if result is not None and getattr(result, "file", None) is not None:
             result.file = StickerFile._parse(client, result.file)
         return result
+
+    async def download(
+        self,
+        path: str | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Any:
+        if getattr(self, "file", None) is None:
+            raise RuntimeError("This sticker does not contain a downloadable file")
+        return await self.file.download(
+            path=path,
+            in_memory=in_memory,
+            file_name=file_name,
+            progress=progress,
+            progress_args=progress_args,
+        )
 
 
 class RubinoPostData(RawObject):
@@ -187,7 +242,12 @@ class Message(RawObject):
 
         return result
 
-    async def reply(self, text: str, parse_mode: Optional[str] = None) -> Any:
+    async def reply(
+        self,
+        text: str,
+        parse_mode: Optional[str] = None,
+        entities: Optional[list[Any]] = None,
+    ) -> Any:
         if self._client is None:
             raise RuntimeError("This message is not bound to a Client instance")
 
@@ -204,7 +264,28 @@ class Message(RawObject):
             rnd=str(time.time_ns()),
             text=text,
             parse_mode=parse_mode,
+            entities=entities,
             reply_to_message_id=message_id,
+        )
+
+    async def download(
+        self,
+        path: str | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Any:
+        if self._client is None:
+            raise RuntimeError("This message is not bound to a Client instance")
+        return await self._client.download_file(
+            self,
+            path=path,
+            in_memory=in_memory,
+            file_name=file_name,
+            progress=progress,
+            progress_args=progress_args,
         )
 
     @property
