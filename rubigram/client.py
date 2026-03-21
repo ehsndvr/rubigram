@@ -39,6 +39,7 @@ from rubigram.network.socket import SocketTransport
 from rubigram.network.transport import ApiUrlPool, RpcTransport
 from rubigram.network.upload import UploadTransport
 from rubigram.network.download import DownloadTransport
+from rubigram.methods import Methods
 from rubigram.raw.base import RawMethod
 from rubigram.raw.methods import (
     BlockUser,
@@ -90,7 +91,7 @@ class MessageHandler:
         self.filter = flt
 
 
-class Client:
+class Client(Methods):
     """Raw-first Rubika HTTP client."""
 
     raw = raw
@@ -368,29 +369,6 @@ class Client:
 
     async def get_history(self, object_guid: str, offset: int = 0, limit: int = 50) -> RawObject:
         return await self.invoke(GetHistory(object_guid=object_guid, offset=offset, limit=limit))
-
-    async def send_message(
-        self,
-        object_guid: str,
-        rnd: str,
-        text: Optional[str] = None,
-        parse_mode: Optional[str | ParseMode] = None,
-        reply_to_message_id: Optional[str] = None,
-        file_inline: Optional[Dict[str, Any]] = None,
-        entities: Optional[Sequence[MessageEntity]] = None,
-    ) -> SentMessage:
-        resolved_text, metadata = self._build_message_metadata(text, entities=entities, parse_mode=parse_mode)
-        return await self.invoke(
-            SendMessage(
-                object_guid=object_guid,
-                rnd=rnd,
-                text=resolved_text,
-                file_inline=file_inline,
-                metadata=metadata,
-                parse_mode=None,
-                reply_to_message_id=reply_to_message_id,
-            )
-        )
 
     async def send_voice(
         self,
