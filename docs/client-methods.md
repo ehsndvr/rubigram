@@ -2,6 +2,14 @@
 
 This document describes the current public `Client` API and the typed objects returned by each method.
 
+Peer-aware methods:
+- methods that previously accepted `object_guid` can still use it unchanged
+- the same methods now also accept `peer=` with a `rubigram.Peer`, a typed object, or any object carrying `object_guid` / `user_guid`
+
+Unified client modes:
+- `Client(..., phone_number=...)` or interactive auth uses the user session flow
+- `Client(..., token="...")` uses the bot API flow with the same session storage and session string format
+
 ## Authentication and Session
 
 ### `await app.start() -> Client`
@@ -257,6 +265,12 @@ Related bound methods:
 
 ### `await app.send_music(object_guid, path, *, duration_ms, rnd=None, mime=None, progress=None, progress_args=()) -> SentMessage`
 Uploads a local audio file and sends it as a `Music` media message.
+
+### `await app.send_photo(object_guid, path, *, rnd=None, mime=None, text=None, width=None, height=None, progress=None, progress_args=()) -> SentMessage`
+Uploads a local image and sends it as an `Image` media message.
+
+### `await app.send_document(object_guid, path, *, rnd=None, mime=None, text=None, progress=None, progress_args=()) -> SentMessage`
+Uploads a local file and sends it as a generic `File` media message.
 
 Notes:
 - current implementation expects `duration_ms` explicitly

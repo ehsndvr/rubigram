@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS session (
     device_hash   TEXT,
     registered_device INTEGER,
     registered_device_version TEXT,
+    bot_token     TEXT,
+    bot_offset_id TEXT,
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL
 );
@@ -73,12 +75,12 @@ class SQLiteStorage(ABC):
                 INSERT OR IGNORE INTO session (
                     id, api_version, api_url, api_urls_json, storages_json, cdn_urls_json,
                     sockets_json, auth, tmp_session, public_key, private_key_pem, user_guid,
-                    updates_state, device_hash, registered_device, registered_device_version, created_at, updated_at
+                    updates_state, device_hash, registered_device, registered_device_version, bot_token, bot_offset_id, created_at, updated_at
                 ) VALUES (
                     1, ?, NULL, NULL, NULL, NULL,
                     NULL, NULL, NULL, NULL, NULL, NULL,
                     NULL,
-                    NULL, 0, NULL, ?, ?
+                    NULL, 0, NULL, NULL, NULL, ?, ?
                 )
                 """,
                 ("6", now, now),
@@ -203,6 +205,18 @@ class SQLiteStorage(ABC):
     async def set_registered_device_version(self, value: Optional[str]) -> None:
         self._set_field("registered_device_version", value)
 
+    async def bot_token(self) -> Optional[str]:
+        return self._get_field("bot_token")
+
+    async def set_bot_token(self, value: Optional[str]) -> None:
+        self._set_field("bot_token", value)
+
+    async def bot_offset_id(self) -> Optional[str]:
+        return self._get_field("bot_offset_id")
+
+    async def set_bot_offset_id(self, value: Optional[str]) -> None:
+        self._set_field("bot_offset_id", value)
+
     async def export_session_dict(self) -> dict[str, Any]:
         return {
             "api_version": await self.api_version(),
@@ -220,6 +234,8 @@ class SQLiteStorage(ABC):
             "device_hash": await self.device_hash(),
             "registered_device": await self.registered_device(),
             "registered_device_version": await self.registered_device_version(),
+            "bot_token": await self.bot_token(),
+            "bot_offset_id": await self.bot_offset_id(),
         }
 
     async def export_session_string(self) -> str:
@@ -259,3 +275,7 @@ class SQLiteStorage(ABC):
             await self.set_registered_device(bool(data["registered_device"]))
         if "registered_device_version" in data:
             await self.set_registered_device_version(data["registered_device_version"])
+        if "bot_token" in data:
+            await self.set_bot_token(data["bot_token"])
+        if "bot_offset_id" in data:
+            await self.set_bot_offset_id(data["bot_offset_id"])

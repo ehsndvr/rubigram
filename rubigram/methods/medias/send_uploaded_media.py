@@ -1,21 +1,18 @@
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Dict, Optional
 
 import rubigram
-from rubigram import enums
-from rubigram import raw
 from rubigram import types
-from rubigram import utils
 
 class SendUploadedMedia:
     async def send_uploaded_media(
         self: "rubigram.Client",
         *,
-        object_guid: str,
+        object_guid: str | Any = None,
         path: str | Path,
         media_type: str,
+        peer: Any = None,
         rnd: Optional[str] = None,
         mime: Optional[str] = None,
         text: Optional[str] = None,
@@ -48,7 +45,7 @@ class SendUploadedMedia:
             file_inline.update(extra_file_inline)
 
         return await self.send_message(
-            object_guid=object_guid,
+            object_guid=self._resolve_object_guid(object_guid, peer=peer),
             rnd=rnd or str(time.time_ns()),
             text=text,
             file_inline=file_inline,

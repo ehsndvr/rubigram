@@ -1,8 +1,5 @@
-import os
-import re
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Optional
 
 import rubigram
 from rubigram.types import UploadDescriptor

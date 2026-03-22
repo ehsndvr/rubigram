@@ -107,5 +107,34 @@ def regex(pattern: str | Pattern[str]) -> Filter:
     return create(lambda client, message: bool(compiled.search(getattr(message, "text", "") or "")), f"regex:{compiled.pattern}")
 
 
+def command(commands: str | list[str] | tuple[str, ...], prefixes: str | tuple[str, ...] = "/") -> Filter:
+    if isinstance(commands, str):
+        normalized_commands = {commands.lower()}
+    else:
+        normalized_commands = {command.lower() for command in commands}
+
+    allowed_prefixes = tuple(prefixes) if isinstance(prefixes, str) else tuple(prefixes)
+
+    def func(client: Any, message: Any) -> bool:
+        text = (getattr(message, "text", None) or "").strip()
+        if not text or text[0] not in allowed_prefixes:
+            return False
+
+        parts = text[1:].split()
+        if not parts:
+            return False
+
+        head = parts[0]
+        command_name = head.split("@", 1)[0].lower()
+        if command_name not in normalized_commands:
+            return False
+
+        setattr(message, "command", [command_name, *parts[1:]])
+        return True
+
+    names = ",".join(sorted(normalized_commands))
+    return create(func, f"command:{names}")
+
+
 group_link = regex(r"rubika\.ir/joing/\w{32}")
 channel_link = regex(r"rubika\.ir/joinc/\w{32}")

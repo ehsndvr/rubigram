@@ -8,11 +8,26 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Dict, Optional, Sequence, TypeAlias, TypeVar, Union
 
 from . import crypto, raw
 from . import filters as rubigram_filters
+from .bot.enums import ChatKeypadType as BotChatKeypadType, FileType as BotFileType
+from .bot.transport import BotTransport
+from .bot.types import (
+    Bot as BotProfile,
+    BotCommand,
+    BotUpdates,
+    Chat as BotChat,
+    File as BotFile,
+    InlineMessage as BotInlineMessage,
+    Keypad as BotKeypad,
+    SentMessage as BotSentMessage,
+    Update as BotUpdate,
+    WebhookUpdate,
+)
 from .enums import ParseMode
+from .peer import Peer
 from rubigram.crypto import (
     AuthSigner,
     AuthUnwrapper,
@@ -83,6 +98,7 @@ from rubigram.version import __version__
 
 log = logging.getLogger(__name__)
 ResultT = TypeVar("ResultT")
+PeerLike: TypeAlias = str | Peer | Any
 
 
 class MessageHandler:
@@ -116,6 +132,7 @@ class Client(Methods):
         name: str,
         workdir: Union[str, Path] = Path("."),
         session_string: Optional[str] = None,
+        token: Optional[str] = None,
         in_memory: bool = False,
         pem_private_key: Optional[str] = None,
         timeout: float = 20.0,
@@ -136,6 +153,7 @@ class Client(Methods):
         self.name = name
         self.workdir = Path(workdir) if workdir else Path(".")
         self.session_string = session_string
+        self.token = token
         self.in_memory = in_memory
         self.timeout = timeout
         self.pem_private_key = pem_private_key
@@ -172,10 +190,15 @@ class Client(Methods):
         self._upload_transport: Optional[UploadTransport] = None
         self._download_transport: Optional[DownloadTransport] = None
         self._socket_transport: Optional[SocketTransport] = None
+        self._bot_transport: Optional[BotTransport] = None
         self._codec: Optional[Codec] = None
         self._is_connected = False
         self._message_handlers: list[MessageHandler] = []
+        self._inline_message_handlers: list[Callable[[Client, BotInlineMessage], Any]] = []
         self._update_listener_task: Optional[asyncio.Task[None]] = None
+        self._bot_polling_task: Optional[asyncio.Task[None]] = None
+        self._bot_polling_stop = asyncio.Event()
+        self._bot_last_offset_id: Optional[str] = None
         self._idle_event = asyncio.Event()
 
     def __enter__(self) -> Client:
@@ -195,12 +218,26 @@ class Client(Methods):
     def is_connected(self) -> bool:
         return self._is_connected
 
+    @property
+    def is_bot(self) -> bool:
+        return bool(self.token)
+
     async def start(self) -> Client:
         """Open storage, refresh DC configuration, and initialize transport."""
         if self._is_connected:
             return self
 
         await self.storage.open()
+        if self.token is not None:
+            await self.storage.set_bot_token(self.token)
+        self.token = self.token or await self.storage.bot_token()
+        self._bot_last_offset_id = await self.storage.bot_offset_id()
+
+        if self.is_bot:
+            self._bot_transport = BotTransport(self.token, timeout=self.timeout)
+            self._is_connected = True
+            return self
+
         self._dc_discovery = DcDiscovery(timeout=self.timeout)
 
         try:
@@ -270,185 +307,21 @@ class Client(Methods):
 
         return decorator
 
+    def on_inline_message(self):
+        def decorator(func):
+            self._inline_message_handlers.append(func)
+            return func
+
+        return decorator
+
     async def idle(self) -> None:
+        if self.is_bot:
+            if self._bot_polling_task is None:
+                await self.start_polling()
+            await self._bot_polling_task
+            return
         await self._ensure_update_listener()
         await self._idle_event.wait()
-
-    async def send_code(self, phone_number: str) -> SentCode:
-        return await self.invoke(SendCode(phone_number=self._normalize_phone_number(phone_number)))
-
-    async def sign_in(
-        self,
-        phone_number: str,
-        phone_code_hash: str,
-        phone_code: str,
-    ) -> Authorization:
-        return await self.invoke(
-            SignIn(
-                phone_number=self._normalize_phone_number(phone_number),
-                phone_code_hash=phone_code_hash,
-                phone_code=phone_code,
-            )
-        )
-
-    async def sign_up(
-        self,
-        first_name: str,
-        last_name: str = "",
-    ) -> Authorization:
-        return await self.invoke(SignUp(first_name=first_name, last_name=last_name))
-
-    async def register_device(self, force: bool = False) -> Empty:
-        if not self.enable_register_device:
-            return Empty()
-
-        auth = await self.storage.auth()
-        if not auth:
-            raise LoginRequired("registerDevice requires an authenticated session")
-
-        if not force:
-            if await self.storage.registered_device() and await self.storage.registered_device_version() == self.APP_VERSION:
-                return Empty()
-
-        await self.storage.set_registered_device(False)
-        await self.storage.set_registered_device_version(None)
-        device_hash = await self._ensure_device_hash()
-        result = await self._invoke_once(
-            RegisterDevice(
-                token_type=self.REGISTER_DEVICE_TOKEN_TYPE,
-                token="",
-                app_version=self._register_device_app_version(),
-                lang_code=self.device_info["lang_code"],
-                system_version=self.system_version,
-                device_model=self.device_model,
-                device_hash=device_hash,
-            ),
-            allow_register_retry=False,
-        )
-        await self.storage.set_registered_device(True)
-        await self.storage.set_registered_device_version(self.APP_VERSION)
-        return result
-
-    async def request_send_file(self, file_name: str, size: int, mime: str) -> UploadDescriptor:
-        return await self.invoke(RequestSendFile(file_name=file_name, size=size, mime=mime))
-
-    async def get_user_info(self, user_guid: str) -> UserInfo:
-        return await self.invoke(GetUserInfo(user_guid=user_guid))
-
-    async def get_me(self) -> UserInfo:
-        user_guid = await self.storage.user_guid()
-        if not user_guid:
-            raise AuthError("No authenticated user_guid is available in the current session")
-        return await self.get_user_info(user_guid)
-
-    async def get_object_by_username(self, username: str) -> ObjectByUsername:
-        return await self.invoke(GetObjectByUsername(username=username))
-
-    async def get_avatars(self, object_guid: str) -> ChatAvatars:
-        return await self.invoke(GetAvatars(object_guid=object_guid))
-
-    async def get_chats_updates(self, state: Optional[int] = None) -> ChatsUpdates:
-        if state is None:
-            state = await self.storage.updates_state()
-        if state is None:
-            state = int(time.time())
-
-        result = await self.invoke(GetChatsUpdates(state=state))
-        if result.new_state is not None:
-            await self.storage.set_updates_state(result.new_state)
-        return result
-
-    async def get_contacts(self, offset: int = 0, limit: int = 100) -> RawObject:
-        return await self.invoke(GetContacts(offset=offset, limit=limit))
-
-    async def get_chat(self, object_guid: str) -> RawObject:
-        return await self.invoke(GetChat(object_guid=object_guid))
-
-    async def get_messages(self, object_guid: str, offset: int = 0, limit: int = 20) -> RawObject:
-        return await self.invoke(GetMessages(object_guid=object_guid, offset=offset, limit=limit))
-
-    async def get_history(self, object_guid: str, offset: int = 0, limit: int = 50) -> RawObject:
-        return await self.invoke(GetHistory(object_guid=object_guid, offset=offset, limit=limit))
-
-    async def send_voice(
-        self,
-        object_guid: str,
-        path: str | Path,
-        *,
-        rnd: Optional[str] = None,
-        duration_ms: float | int = 0,
-        mime: Optional[str] = None,
-        progress: Optional[Callable[..., Any]] = None,
-        progress_args: tuple[Any, ...] = (),
-    ) -> SentMessage:
-        file_path = Path(path)
-        resolved_duration_ms = self._resolve_voice_duration_ms(file_path, duration_ms)
-        return await self._send_uploaded_media(
-            object_guid=object_guid,
-            path=file_path,
-            rnd=rnd,
-            mime=mime,
-            media_type="Voice",
-            progress=progress,
-            progress_args=progress_args,
-            extra_file_inline={"time": resolved_duration_ms},
-        )
-
-    async def send_music(
-        self,
-        object_guid: str,
-        path: str | Path,
-        *,
-        duration_ms: float | int,
-        rnd: Optional[str] = None,
-        mime: Optional[str] = None,
-        progress: Optional[Callable[..., Any]] = None,
-        progress_args: tuple[Any, ...] = (),
-    ) -> SentMessage:
-        return await self._send_uploaded_media(
-            object_guid=object_guid,
-            path=path,
-            rnd=rnd,
-            mime=mime,
-            media_type="Music",
-            progress=progress,
-            progress_args=progress_args,
-            extra_file_inline={"time": duration_ms},
-        )
-
-    async def send_video(
-        self,
-        object_guid: str,
-        path: str | Path,
-        *,
-        duration_ms: float | int,
-        width: int,
-        height: int,
-        rnd: Optional[str] = None,
-        mime: Optional[str] = None,
-        text: Optional[str] = None,
-        is_round: bool = False,
-        is_spoil: bool = False,
-        progress: Optional[Callable[..., Any]] = None,
-        progress_args: tuple[Any, ...] = (),
-    ) -> SentMessage:
-        return await self._send_uploaded_media(
-            object_guid=object_guid,
-            path=path,
-            rnd=rnd,
-            mime=mime,
-            media_type="Video",
-            text=text,
-            progress=progress,
-            progress_args=progress_args,
-            extra_file_inline={
-                "time": duration_ms,
-                "width": width,
-                "height": height,
-                "is_round": is_round,
-                "is_spoil": is_spoil,
-            },
-        )
 
     async def download_file(
         self,
@@ -487,19 +360,10 @@ class Client(Methods):
             progress_args=progress_args,
         )
 
-    async def edit_message(self, object_guid: str, message_id: str, text: str) -> RawObject:
-        return await self.invoke(EditMessage(object_guid=object_guid, message_id=message_id, text=text))
-
-    async def delete_message(self, object_guid: str, message_id: str) -> RawObject:
-        return await self.invoke(DeleteMessage(object_guid=object_guid, message_id=message_id))
-
-    async def block_user(self, object_guid: str) -> RawObject:
-        return await self.invoke(BlockUser(object_guid=object_guid))
-
-    async def unblock_user(self, object_guid: str) -> RawObject:
-        return await self.invoke(UnblockUser(object_guid=object_guid))
-
     async def authorize(self) -> Authorization | dict[str, str]:
+        if self.is_bot:
+            await self.storage.set_bot_token(self.token)
+            return {"bot_token": self.token}
         if await self.storage.auth():
             user_guid = await self.storage.user_guid()
             if not user_guid:
@@ -851,6 +715,106 @@ class Client(Methods):
         plain_text = "".join(parts)
         return plain_text, self._metadata_from_entities(entities)
 
+    async def _send_bot_message(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        chat_keypad: Optional[BotKeypad] = None,
+        disable_notification: bool = False,
+        inline_keypad: Optional[BotKeypad] = None,
+        reply_to_message_id: Optional[str] = None,
+        chat_keypad_type: Optional[BotChatKeypadType | str] = None,
+    ) -> BotSentMessage:
+        return BotSentMessage._parse(
+            self,
+            await self._invoke_bot(
+                "sendMessage",
+                self._clean_bot_payload(
+                    {
+                        "chat_id": chat_id,
+                        "text": text,
+                        "chat_keypad": self._serialize_bot(chat_keypad),
+                        "disable_notification": disable_notification,
+                        "inline_keypad": self._serialize_bot(inline_keypad),
+                        "reply_to_message_id": reply_to_message_id,
+                        "chat_keypad_type": str(chat_keypad_type) if chat_keypad_type is not None else None,
+                    }
+                ),
+            ),
+        )
+
+    async def _invoke_bot(self, method: str, payload: Optional[dict[str, Any]] = None) -> Any:
+        if not self.is_bot or self._bot_transport is None:
+            raise RuntimeError("This method requires a token-based bot session")
+        try:
+            return self._unwrap_bot_response(await self._bot_transport.call_method(method, payload))
+        except InvalidInput as exc:
+            if method == "sendMessage" and payload and payload.get("chat_id"):
+                chat_id = str(payload.get("chat_id"))
+                if chat_id.startswith("u0"):
+                    raise InvalidInput(
+                        exc.status,
+                        (
+                            "Bot sendMessage expects chat_id, not user_guid/object_guid. "
+                            "Use the chat_id returned by get_updates(), webhook payloads, or get_chat()."
+                        ),
+                        exc.raw,
+                    ) from exc
+            raise
+
+    def _unwrap_bot_response(self, response: Any) -> Any:
+        if not isinstance(response, dict):
+            return response
+        if "ok" in response:
+            if response.get("ok") is False:
+                raise RubikaError(str(response.get("description") or response.get("error") or "Bot API request failed"))
+            return response.get("result")
+        status = response.get("status")
+        if status and status != "OK":
+            raise map_rpc_error(status, response.get("status_det"), response)
+        if "data" in response:
+            return response["data"]
+        return response
+
+    def _serialize_bot(self, value: Any) -> Any:
+        if value is None:
+            return None
+        if hasattr(value, "to_dict"):
+            return value.to_dict()
+        if isinstance(value, list):
+            return [self._serialize_bot(item) for item in value]
+        return value
+
+    def _clean_bot_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in payload.items() if value is not None}
+
+    async def _bot_polling_loop(self, *, limit: int, idle_sleep: float) -> None:
+        while not self._bot_polling_stop.is_set():
+            updates = await self.get_updates(limit=limit)
+            if not updates.updates:
+                await asyncio.sleep(idle_sleep)
+                continue
+            for update in updates.updates:
+                await self._dispatch_bot_update(update)
+
+    async def _dispatch_bot_update(self, update: BotUpdate) -> None:
+        message = getattr(update, "new_message", None)
+        if message is not None:
+            for handler in list(self._message_handlers):
+                try:
+                    passed = handler.filter(self, message)
+                    if inspect.isawaitable(passed):
+                        passed = await passed
+                    if not passed:
+                        continue
+
+                    result = handler.callback(self, message)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    log.exception("Bot message handler failed")
+
     def _resolve_download_target(self, file: Any) -> Any:
         if hasattr(file, "file_id") and hasattr(file, "dc_id") and hasattr(file, "access_hash_rec"):
             return file
@@ -862,6 +826,21 @@ class Client(Methods):
             return file.sticker.file
 
         raise ValueError("The provided object does not contain downloadable file metadata")
+
+    def _resolve_peer(self, peer: PeerLike) -> Peer:
+        return Peer.from_value(peer)
+
+    def _resolve_object_guid(self, object_guid: PeerLike = None, *, peer: PeerLike = None) -> str:
+        candidate = peer if peer is not None else object_guid
+        if candidate is None:
+            raise ValueError("Either object_guid or peer must be provided")
+        return self._resolve_peer(candidate).object_guid
+
+    def _resolve_user_guid(self, user_guid: PeerLike) -> str:
+        resolved = self._resolve_peer(user_guid).user_guid
+        if not resolved:
+            raise ValueError("user_guid could not be resolved from peer")
+        return resolved
 
     def _resolve_download_destination(self, path: str | Path | None, file_name: str) -> Path:
         if path is None:
@@ -1125,6 +1104,8 @@ class Client(Methods):
             raise error
 
     def _should_interactive_authorize(self) -> bool:
+        if self.is_bot:
+            return False
         if not self.interactive_auth:
             return False
         if sys.stdin is None or sys.stdout is None:
@@ -1168,6 +1149,14 @@ class Client(Methods):
         return str(error)
 
     async def _safe_close(self) -> None:
+        if self._bot_polling_task is not None:
+            self._bot_polling_task.cancel()
+            try:
+                await self._bot_polling_task
+            except asyncio.CancelledError:
+                pass
+            self._bot_polling_task = None
+
         if self._update_listener_task is not None:
             self._update_listener_task.cancel()
             try:
@@ -1184,6 +1173,10 @@ class Client(Methods):
         if self._transport is not None:
             await self._transport.close()
             self._transport = None
+
+        if self._bot_transport is not None:
+            await self._bot_transport.close()
+            self._bot_transport = None
 
         if self._upload_transport is not None:
             await self._upload_transport.close()

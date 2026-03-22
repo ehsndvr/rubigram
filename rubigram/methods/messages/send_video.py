@@ -1,21 +1,17 @@
-import os
-import re
-from datetime import datetime
-from typing import Any, Callable, Dict, Optional, Sequence, TypeVar, Union
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 import rubigram
-from rubigram import enums
-from rubigram import raw
 from rubigram import types
-from rubigram import utils
 
 
 class SendVideo:
-   async def send_video(
+    async def send_video(
         self: "rubigram.Client",
-        object_guid: str,
-        path: str | Path,
+        object_guid: str | Any = None,
+        path: str | Path = "",
         *,
+        peer: Any = None,
         duration_ms: float | int,
         width: int,
         height: int,
@@ -28,7 +24,7 @@ class SendVideo:
         progress_args: tuple[Any, ...] = (),
     ) -> types.SentMessage:
         return await self._send_uploaded_media(
-            object_guid=object_guid,
+            object_guid=self._resolve_object_guid(object_guid, peer=peer),
             path=path,
             rnd=rnd,
             mime=mime,

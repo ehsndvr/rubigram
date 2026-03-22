@@ -65,6 +65,10 @@ class FileStorage(SQLiteStorage):
                     self.conn.execute("ALTER TABLE session ADD COLUMN registered_device INTEGER")
                 if "registered_device_version" not in columns:
                     self.conn.execute("ALTER TABLE session ADD COLUMN registered_device_version TEXT")
+                if "bot_token" not in columns:
+                    self.conn.execute("ALTER TABLE session ADD COLUMN bot_token TEXT")
+                if "bot_offset_id" not in columns:
+                    self.conn.execute("ALTER TABLE session ADD COLUMN bot_offset_id TEXT")
                 # Make sure the session row exists.
                 now = int(__import__("time").time())
                 self.conn.execute(

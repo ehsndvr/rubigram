@@ -3,10 +3,11 @@ from pathlib import Path
 
 import rubigram
 
+
 class GuessUploadMime:
     def guess_upload_mime(
         self: "rubigram.Client",
-        path: Path
+        path: Path,
     ) -> str:
         guessed, _ = mimetypes.guess_type(path.name)
         if guessed:

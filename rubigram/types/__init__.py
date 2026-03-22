@@ -1,3 +1,4 @@
+from rubigram.peer import Peer
 from .object import Object
 from .formatting import MessageEntity
 from .results import (
@@ -37,6 +38,7 @@ from .results import (
 
 __all__ = [
     "Object",
+    "Peer",
     "MessageEntity",
     "RawObject",
     "Empty",
