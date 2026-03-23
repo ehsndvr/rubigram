@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 import rubigram
-from rubigram.raw.methods import GetAvatars, GetContacts, GetObjectByUsername, GetUserInfo
-from rubigram.types import ChatAvatars, ObjectByUsername, RawObject, UserInfo
+from rubigram.raw.methods import GetAvatars, GetContacts, GetContactsLastOnline, GetObjectByUsername, GetProfileLinkItems, GetUserInfo
+from rubigram.types import ChatAvatars, ContactsLastOnline, ObjectByUsername, ProfileLinkItems, RawObject, UserInfo
 
 
 class UserProfile:
@@ -35,3 +35,13 @@ class UserProfile:
 
     async def get_contacts(self: "rubigram.Client", offset: int = 0, limit: int = 100) -> RawObject:
         return await self.invoke(GetContacts(offset=offset, limit=limit))
+
+    async def get_contacts_last_online(self: "rubigram.Client", user_guids: Sequence[Any]) -> ContactsLastOnline:
+        return await self.invoke(
+            GetContactsLastOnline(
+                user_guids=[self._resolve_user_guid(user_guid) for user_guid in user_guids],
+            )
+        )
+
+    async def get_profile_link_items(self: "rubigram.Client", object_guid: Any = None, *, peer: Any = None) -> ProfileLinkItems:
+        return await self.invoke(GetProfileLinkItems(object_guid=self._resolve_object_guid(object_guid, peer=peer)))

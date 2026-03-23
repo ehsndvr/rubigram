@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from rubigram.raw.base import RawMethod
-from rubigram.types import RawObject, SentMessage
+from rubigram.types import DeleteChatHistoryResult, Empty, RawObject, SentMessage
 
 if TYPE_CHECKING:
     import rubigram
@@ -84,6 +84,50 @@ class DeleteMessage(RawMethod[RawObject]):
             "object_guid": self.object_guid,
             "message_id": self.message_id,
         }
+
+
+@dataclass
+class DeleteChatHistory(RawMethod[DeleteChatHistoryResult]):
+    """
+    Delete local chat history up to a message id.
+
+    Requires authentication.
+    """
+    object_guid: str
+    last_message_id: str
+
+    method_name = "deleteChatHistory"
+
+    def to_input(self) -> Dict[str, Any]:
+        return {
+            "object_guid": self.object_guid,
+            "last_message_id": self.last_message_id,
+        }
+
+    def parse_response(self, client: "rubigram.Client", data: Any) -> DeleteChatHistoryResult:
+        return DeleteChatHistoryResult._parse(client, data)
+
+
+@dataclass
+class SendChatActivity(RawMethod[Empty]):
+    """
+    Send a transient chat activity state such as Typing.
+
+    Requires authentication.
+    """
+    object_guid: str
+    activity: str
+
+    method_name = "sendChatActivity"
+
+    def to_input(self) -> Dict[str, Any]:
+        return {
+            "object_guid": self.object_guid,
+            "activity": self.activity,
+        }
+
+    def parse_response(self, client: "rubigram.Client", data: Any) -> Empty:
+        return Empty._parse(client, data or {})
 
 
 @dataclass

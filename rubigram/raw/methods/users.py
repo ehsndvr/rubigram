@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict
 
 from rubigram.raw.base import RawMethod
-from rubigram.types import ChatAvatars, ObjectByUsername, RawObject, UserInfo
+from rubigram.types import ChatAvatars, ContactsLastOnline, ObjectByUsername, ProfileLinkItems, RawObject, UserInfo
 
 if TYPE_CHECKING:
     import rubigram
@@ -119,3 +119,45 @@ class GetContacts(RawMethod[RawObject]):
             "offset": self.offset,
             "limit": self.limit,
         }
+
+
+@dataclass
+class GetContactsLastOnline(RawMethod[ContactsLastOnline]):
+    """
+    Get last-online data for multiple users.
+
+    Requires authentication.
+    """
+
+    user_guids: list[str]
+
+    method_name = "getContactsLastOnline"
+
+    def to_input(self) -> Dict[str, Any]:
+        return {
+            "user_guids": self.user_guids,
+        }
+
+    def parse_response(self, client: "rubigram.Client", data: Any) -> ContactsLastOnline:
+        return ContactsLastOnline._parse(client, data)
+
+
+@dataclass
+class GetProfileLinkItems(RawMethod[ProfileLinkItems]):
+    """
+    Get profile link items for a user or chat object.
+
+    Requires authentication.
+    """
+
+    object_guid: str
+
+    method_name = "getProfileLinkItems"
+
+    def to_input(self) -> Dict[str, Any]:
+        return {
+            "object_guid": self.object_guid,
+        }
+
+    def parse_response(self, client: "rubigram.Client", data: Any) -> ProfileLinkItems:
+        return ProfileLinkItems._parse(client, data)

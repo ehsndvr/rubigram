@@ -4,11 +4,35 @@ from typing import Any
 
 import rubigram
 from rubigram.bot.types import SentMessage as BotSentMessage
-from rubigram.raw.methods import DeleteMessage, EditMessage
-from rubigram.types import RawObject
+from rubigram.raw.methods import DeleteChatHistory, DeleteMessage, EditMessage, SendChatActivity
+from rubigram.types import DeleteChatHistoryResult, Empty, RawObject
 
 
 class ManageMessage:
+    async def send_chat_activity(
+        self: "rubigram.Client",
+        object_guid: Any = None,
+        activity: str = "Typing",
+        *,
+        peer: Any = None,
+    ) -> Empty:
+        if self.is_bot:
+            raise RuntimeError("send_chat_activity() is only available for authenticated user sessions")
+        return await self.invoke(
+            SendChatActivity(
+                object_guid=self._resolve_object_guid(object_guid, peer=peer),
+                activity=activity,
+            )
+        )
+
+    async def send_typing(
+        self: "rubigram.Client",
+        object_guid: Any = None,
+        *,
+        peer: Any = None,
+    ) -> Empty:
+        return await self.send_chat_activity(object_guid=object_guid, activity="Typing", peer=peer)
+
     async def edit_message(
         self: "rubigram.Client",
         object_guid: Any = None,
@@ -54,6 +78,20 @@ class ManageMessage:
             DeleteMessage(
                 object_guid=self._resolve_object_guid(object_guid, peer=peer),
                 message_id=message_id,
+            )
+        )
+
+    async def delete_chat_history(
+        self: "rubigram.Client",
+        object_guid: Any = None,
+        last_message_id: str = "",
+        *,
+        peer: Any = None,
+    ) -> DeleteChatHistoryResult:
+        return await self.invoke(
+            DeleteChatHistory(
+                object_guid=self._resolve_object_guid(object_guid, peer=peer),
+                last_message_id=last_message_id,
             )
         )
 

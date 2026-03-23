@@ -383,6 +383,24 @@ class Client(Methods):
                 self.token = None
                 continue
 
+            phone_number = self._normalize_phone_number(credential)
+            if self._looks_like_phone_number_input(credential):
+                if not phone_number:
+                    self.phone_number = None
+                    continue
+
+                try:
+                    sent_code = await self.send_code(phone_number)
+                except RubikaError as e:
+                    print(self._format_authorize_error(e, stage="phone_number"))
+                    self.phone_number = None
+                    continue
+
+                self.phone_number = phone_number
+                send_type = getattr(sent_code, "send_type", "SMS")
+                print(f"The confirmation code has been sent via {send_type}.")
+                break
+
             if self._looks_like_bot_token(credential):
                 self.token = credential
                 await self.storage.set_bot_token(self.token)
@@ -390,22 +408,7 @@ class Client(Methods):
                 print("Bot token accepted. Starting bot session.")
                 return {"bot_token": self.token}
 
-            phone_number = self._normalize_phone_number(credential)
-            if not phone_number:
-                self.phone_number = None
-                continue
-
-            try:
-                sent_code = await self.send_code(phone_number)
-            except RubikaError as e:
-                print(self._format_authorize_error(e, stage="phone_number"))
-                self.phone_number = None
-                continue
-
-            self.phone_number = phone_number
-            send_type = getattr(sent_code, "send_type", "SMS")
-            print(f"The confirmation code has been sent via {send_type}.")
-            break
+            self.phone_number = None
 
         phone_code_hash = getattr(sent_code, "phone_code_hash", None)
         if not phone_code_hash:
@@ -1148,9 +1151,15 @@ class Client(Methods):
             normalized = "98" + normalized[1:]
         return normalized
 
+    def _looks_like_phone_number_input(self, value: str) -> bool:
+        stripped = value.strip()
+        if not stripped:
+            return False
+        return all(ch.isdigit() or ch.isspace() or ch in "+-()" for ch in stripped)
+
     def _looks_like_bot_token(self, value: str) -> bool:
         stripped = value.strip()
-        return bool(stripped) and any(not ch.isdigit() for ch in stripped if not ch.isspace())
+        return bool(stripped) and not self._looks_like_phone_number_input(stripped)
 
     def _format_authorize_error(self, error: RubikaError, stage: str) -> str:
         if isinstance(error, InvalidInput) and stage == "phone_number":
