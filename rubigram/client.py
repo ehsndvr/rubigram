@@ -373,10 +373,26 @@ class Client(Methods):
         self._print_welcome()
 
         while True:
-            phone_number = self._normalize_phone_number(
-                (self.phone_number or await self._prompt("Enter phone number (example: 989121234567): ")).strip()
-            )
+            credential = (
+                self.phone_number
+                or self.token
+                or await self._prompt("Enter phone number or bot token: ")
+            ).strip()
+            if not credential:
+                self.phone_number = None
+                self.token = None
+                continue
+
+            if self._looks_like_bot_token(credential):
+                self.token = credential
+                await self.storage.set_bot_token(self.token)
+                self._bot_transport = BotTransport(self.token, timeout=self.timeout)
+                print("Bot token accepted. Starting bot session.")
+                return {"bot_token": self.token}
+
+            phone_number = self._normalize_phone_number(credential)
             if not phone_number:
+                self.phone_number = None
                 continue
 
             try:
@@ -1115,12 +1131,14 @@ class Client(Methods):
     def _print_welcome(self) -> None:
         print(f"Welcome to Rubigram (version {__version__})")
         print("No saved session was found. Starting interactive authorization.")
-        print("Phone format: use international format without '+' or leading zero. Example: 989121234567\n")
+        print("Phone format: use international format without '+' or leading zero. Example: 989121234567")
+        print("You can also paste a bot token instead of a phone number.\n")
 
     async def _prompt(self, text: str) -> str:
         return await asyncio.to_thread(input, text)
 
     def _normalize_phone_number(self, phone_number: str) -> str:
+        """Normalizes the phone number by removing non-digit characters and handling common prefixes."""
         normalized = "".join(ch for ch in phone_number if ch.isdigit() or ch == "+").strip()
         if normalized.startswith("+"):
             normalized = normalized[1:]
@@ -1129,6 +1147,10 @@ class Client(Methods):
         elif normalized.startswith("09"):
             normalized = "98" + normalized[1:]
         return normalized
+
+    def _looks_like_bot_token(self, value: str) -> bool:
+        stripped = value.strip()
+        return bool(stripped) and any(not ch.isdigit() for ch in stripped if not ch.isspace())
 
     def _format_authorize_error(self, error: RubikaError, stage: str) -> str:
         if isinstance(error, InvalidInput) and stage == "phone_number":
