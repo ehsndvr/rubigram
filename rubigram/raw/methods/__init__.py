@@ -4,7 +4,7 @@ from rubigram.raw.methods.auth import (
     SignIn,
     SignUp,
 )
-from rubigram.raw.methods.channels import AddChannel, GetChannelAllMembers, GetChannelInfo, GetChannelLink
+from rubigram.raw.methods.channels import AddChannel, AddChannelMembers, EditChannelInfo, GetBannedChannelMembers, GetChannelAdminMembers, GetChannelAllMembers, GetChannelInfo, GetChannelLink, SetChannelAdmin
 from rubigram.raw.methods.files import RequestSendFile
 from rubigram.raw.methods.groups import (
     AddGroup,
@@ -34,7 +34,7 @@ from rubigram.raw.methods.messages import (
     GetHistory,
     GetChat,
 )
-from rubigram.raw.methods.updates import GetAvailableReactions, GetChatsUpdates
+from rubigram.raw.methods.updates import GetAvailableReactions, GetChatsUpdates, GetContactsUpdates
 from rubigram.raw.methods.users import (
     GetUserInfo,
     GetObjectByUsername,
@@ -44,6 +44,7 @@ from rubigram.raw.methods.users import (
     GetContacts,
     GetContactsLastOnline,
     GetProfileLinkItems,
+    SearchGlobalObjects,
 )
 
 __all__ = [
@@ -53,9 +54,14 @@ __all__ = [
     "RegisterDevice",
     "RequestSendFile",
     "AddChannel",
+    "AddChannelMembers",
+    "EditChannelInfo",
+    "GetBannedChannelMembers",
+    "GetChannelAdminMembers",
     "GetChannelLink",
     "GetChannelInfo",
     "GetChannelAllMembers",
+    "SetChannelAdmin",
     "AddGroup",
     "AddGroupMembers",
     "BanGroupMember",
@@ -81,6 +87,7 @@ __all__ = [
     "GetHistory",
     "GetChat",
     "GetChatsUpdates",
+    "GetContactsUpdates",
     "GetAvailableReactions",
     "GetUserInfo",
     "GetObjectByUsername",
@@ -90,4 +97,5 @@ __all__ = [
     "GetContacts",
     "GetContactsLastOnline",
     "GetProfileLinkItems",
+    "SearchGlobalObjects",
 ]

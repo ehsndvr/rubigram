@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import rubigram
-from rubigram.raw.methods import GetAvatars, GetContacts, GetContactsLastOnline, GetObjectByUsername, GetProfileLinkItems, GetUserInfo
-from rubigram.types import ChatAvatars, ContactsLastOnline, ObjectByUsername, ProfileLinkItems, RawObject, UserInfo
+from rubigram.raw.methods import GetAvatars, GetContacts, GetContactsLastOnline, GetContactsUpdates, GetObjectByUsername, GetProfileLinkItems, GetUserInfo, SearchGlobalObjects
+from rubigram.types import ChatAvatars, ContactsLastOnline, ContactsUpdates, ObjectByUsername, ProfileLinkItems, RawObject, SearchGlobalObjectsResult, UserInfo
 
 
 class UserProfile:
@@ -43,5 +43,20 @@ class UserProfile:
             )
         )
 
+    async def get_contacts_updates(self: "rubigram.Client", state: int) -> ContactsUpdates:
+        return await self.invoke(GetContactsUpdates(state=state))
+
     async def get_profile_link_items(self: "rubigram.Client", object_guid: Any = None, *, peer: Any = None) -> ProfileLinkItems:
         return await self.invoke(GetProfileLinkItems(object_guid=self._resolve_object_guid(object_guid, peer=peer)))
+
+    async def search_global_objects(
+        self: "rubigram.Client",
+        search_text: str,
+        filter_types: Sequence[str] = (),
+    ) -> SearchGlobalObjectsResult:
+        return await self.invoke(
+            SearchGlobalObjects(
+                search_text=search_text,
+                filter_types=[str(item) for item in filter_types],
+            )
+        )

@@ -702,6 +702,40 @@ class ContactsLastOnline(Object):
         return result
 
 
+class ContactsUpdates(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        users: Optional[list[User]] = None,
+        deleted_users: Optional[list[str]] = None,
+        new_state: Optional[int] = None,
+        status: Optional[str] = None,
+        timestamp: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.users = users or []
+        self.deleted_users = deleted_users or []
+        self.new_state = new_state
+        self.status = status
+        self.timestamp = timestamp
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["ContactsUpdates"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            users=[User._parse(client, user) for user in data.get("users", [])],
+            deleted_users=data.get("deleted_users") or [],
+            new_state=data.get("new_state"),
+            status=data.get("status"),
+            timestamp=data.get("timestamp"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
 class ObjectByUsername(Object):
     def __init__(
         self,
@@ -769,6 +803,80 @@ class Avatar(Object):
             thumbnail=AvatarFile._parse(client, data.get("thumbnail")),
             main=AvatarFile._parse(client, data.get("main")),
             create_time=data.get("create_time"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class SearchGlobalObject(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        object_guid: Optional[str] = None,
+        type: Optional[str] = None,
+        title: Optional[str] = None,
+        avatar_thumbnail: Optional[AvatarThumbnail] = None,
+        is_verified: Optional[bool] = None,
+        is_deleted: Optional[bool] = None,
+        count_members: Optional[int] = None,
+        username: Optional[str] = None,
+        track_id: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.object_guid = object_guid
+        self.type = type
+        self.title = title
+        self.avatar_thumbnail = avatar_thumbnail
+        self.is_verified = is_verified
+        self.is_deleted = is_deleted
+        self.count_members = count_members
+        self.username = username
+        self.track_id = track_id
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["SearchGlobalObject"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            object_guid=data.get("object_guid"),
+            type=data.get("type"),
+            title=data.get("title"),
+            avatar_thumbnail=AvatarThumbnail._parse(client, data.get("avatar_thumbnail")),
+            is_verified=data.get("is_verified"),
+            is_deleted=data.get("is_deleted"),
+            count_members=data.get("count_members"),
+            username=data.get("username"),
+            track_id=data.get("track_id"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class SearchGlobalObjectsResult(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        objects: Optional[list[SearchGlobalObject]] = None,
+        has_continue: Optional[bool] = None,
+        timestamp: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.objects = objects or []
+        self.has_continue = has_continue
+        self.timestamp = timestamp
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["SearchGlobalObjectsResult"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            objects=[SearchGlobalObject._parse(client, item) for item in data.get("objects", [])],
+            has_continue=data.get("has_continue"),
+            timestamp=data.get("timestamp"),
         )
         _apply_unknown_fields(result, client, data, result.__dict__.keys())
         return result
@@ -1205,6 +1313,62 @@ class AddChannelResult(Object):
         return result
 
 
+class AddChannelMembersResult(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        added_in_chat_members: Optional[list[GroupMember]] = None,
+        timestamp: Optional[str] = None,
+        channel: Optional[Channel] = None,
+    ):
+        super().__init__(client)
+        self.added_in_chat_members = added_in_chat_members or []
+        self.timestamp = timestamp
+        self.channel = channel
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["AddChannelMembersResult"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            added_in_chat_members=[GroupMember._parse(client, item) for item in data.get("added_in_chat_members", [])],
+            timestamp=data.get("timestamp"),
+            channel=Channel._parse(client, data.get("channel")),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class EditChannelInfoResult(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        channel: Optional[Channel] = None,
+        chat_update: Optional[SocketChatUpdate] = None,
+        timestamp: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.channel = channel
+        self.chat_update = chat_update
+        self.timestamp = timestamp
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["EditChannelInfoResult"]:
+        if data is None:
+            return None
+        result = cls(
+            client=client,
+            channel=Channel._parse(client, data.get("channel")),
+            chat_update=SocketChatUpdate._parse(client, data.get("chat_update")),
+            timestamp=data.get("timestamp"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
 class EditGroupInfoResult(Object):
     def __init__(
         self,
@@ -1342,11 +1506,13 @@ class GroupMembers(Object):
         *,
         client: Any = None,
         in_chat_members: Optional[list[GroupMember]] = None,
+        next_start_id: Optional[str] = None,
         has_continue: Optional[bool] = None,
         timestamp: Optional[str] = None,
     ):
         super().__init__(client)
         self.in_chat_members = in_chat_members or []
+        self.next_start_id = next_start_id
         self.has_continue = has_continue
         self.timestamp = timestamp
 
@@ -1357,6 +1523,7 @@ class GroupMembers(Object):
         result = cls(
             client=client,
             in_chat_members=[GroupMember._parse(client, item) for item in data.get("in_chat_members", [])],
+            next_start_id=data.get("next_start_id"),
             has_continue=data.get("has_continue"),
             timestamp=data.get("timestamp"),
         )

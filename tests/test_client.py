@@ -14,7 +14,7 @@ from rubigram.client import Client
 from rubigram.crypto import encrypt_aes_cbc, export_public_key_for_login, rsa_key_generate
 from rubigram.errors import InvalidInput as ErrorsInvalidInput
 from rubigram.exceptions import AuthKeyInvalid, CodeIsInvalid, InvalidInput, LoginRequired, RegisterDeviceRequired
-from rubigram.raw.methods import AddGroupMembers, DeleteChatHistory, GetChannelAllMembers, GetChannelInfo, GetChannelLink, GetProfileLinkItems, GetUserInfo, SendChatActivity, UploadNewGroupAvatar
+from rubigram.raw.methods import AddChannelMembers, AddGroupMembers, DeleteChatHistory, GetBannedChannelMembers, GetChannelAdminMembers, GetChannelAllMembers, GetChannelInfo, GetChannelLink, GetProfileLinkItems, GetUserInfo, SearchGlobalObjects, SendChatActivity, UploadNewGroupAvatar
 from rubigram.storage import MemoryStorage
 from rubigram.types import Message
 
@@ -1009,6 +1009,50 @@ def test_get_available_reactions_returns_typed_result(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_get_contacts_updates_returns_typed_result(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "getContactsUpdates"
+            assert decrypted_request["input"] == {
+                "state": 1774239888,
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "users": [],
+                        "deleted_users": [],
+                        "new_state": 1774284426,
+                        "status": "OK",
+                        "timestamp": "1774284486",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.get_contacts_updates(1774239888)
+
+        assert result.users == []
+        assert result.deleted_users == []
+        assert result.new_state == 1774284426
+        assert result.status == "OK"
+        assert result.timestamp == "1774284486"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
 def test_delete_chat_history_returns_typed_result(monkeypatch):
     async def scenario():
         monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
@@ -1465,6 +1509,117 @@ def test_add_channel_returns_typed_result(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_add_channel_members_returns_typed_result(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "addChannelMembers"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                "member_guids": ["u0Crz5308d9ca919827a835fac44dbae"],
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "added_in_chat_members": [
+                            {
+                                "member_type": "User",
+                                "member_guid": "u0Crz5308d9ca919827a835fac44dbae",
+                                "first_name": "Ehsan Davari",
+                                "last_name": "",
+                                "is_verified": False,
+                                "is_deleted": False,
+                                "last_online": 1774211400,
+                                "join_type": "Member",
+                                "username": "ehsndvr",
+                                "online_time": {
+                                    "type": "Approximate",
+                                    "approximate_period": "Recently",
+                                },
+                            }
+                        ],
+                        "timestamp": "1774284632",
+                        "channel": {
+                            "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                            "channel_title": "ll",
+                            "avatar_thumbnail": {
+                                "file_id": "88602634217110",
+                                "mime": "jpg",
+                                "dc_id": "846",
+                                "access_hash_rec": "0998626527273395641776449175542026032307",
+                            },
+                            "count_members": 2,
+                            "description": "توضیحاتc",
+                            "is_deleted": False,
+                            "is_verified": False,
+                            "channel_type": "Private",
+                            "sign_messages": False,
+                            "chat_reaction_setting": {
+                                "reaction_type": "Selected",
+                                "selected_reactions": ["3", "2"],
+                            },
+                            "is_restricted_content": False,
+                        },
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.add_channel_members(
+            "c0DSKDg07c609895e68c2ac53ba69faa",
+            member_guids=["u0Crz5308d9ca919827a835fac44dbae"],
+        )
+
+        assert len(result.added_in_chat_members) == 1
+        assert result.added_in_chat_members[0].member_guid == "u0Crz5308d9ca919827a835fac44dbae"
+        assert result.added_in_chat_members[0].join_type == "Member"
+        assert result.channel is not None
+        assert result.channel.channel_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+        assert result.channel.avatar_thumbnail is not None
+        assert result.channel.chat_reaction_setting is not None
+        assert result.channel.chat_reaction_setting.selected_reactions == ["3", "2"]
+        assert result.timestamp == "1774284632"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_add_channel_members_accepts_peer_values(monkeypatch):
+    async def scenario():
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        calls = []
+
+        async def fake_invoke(method):
+            calls.append(method)
+            return "ok"
+
+        client.invoke = fake_invoke  # type: ignore[method-assign]
+
+        result = await client.add_channel_members(
+            peer=Message(object_guid="c0DSKDg07c609895e68c2ac53ba69faa"),
+            member_guids=[Message(object_guid="u0Crz5308d9ca919827a835fac44dbae")],
+        )
+
+        assert result == "ok"
+        assert len(calls) == 1
+        assert isinstance(calls[0], AddChannelMembers)
+        assert calls[0].channel_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+        assert calls[0].member_guids == ["u0Crz5308d9ca919827a835fac44dbae"]
+
+    asyncio.run(scenario())
+
+
 def test_get_channel_link_returns_empty_result(monkeypatch):
     async def scenario():
         monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
@@ -1825,6 +1980,489 @@ def test_get_channel_all_members_accepts_peer_objects(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_edit_channel_info_updates_title_and_description(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "editChannelInfo"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                "title": "ll",
+                "description": "توضیحاتc",
+                "updated_parameters": ["title", "description"],
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "channel": {
+                            "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                            "channel_title": "ll",
+                            "avatar_thumbnail": {
+                                "file_id": "88602634217110",
+                                "mime": "jpg",
+                                "dc_id": "846",
+                                "access_hash_rec": "0998626527273395641776449175542026032307",
+                            },
+                            "count_members": 2,
+                            "description": "توضیحاتc",
+                            "is_deleted": False,
+                            "is_verified": False,
+                            "channel_type": "Private",
+                            "sign_messages": False,
+                            "chat_reaction_setting": {
+                                "reaction_type": "Selected",
+                                "selected_reactions": ["3", "2"],
+                            },
+                            "is_restricted_content": False,
+                        },
+                        "chat_update": {
+                            "object_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                            "action": "Edit",
+                            "chat": {
+                                "abs_object": {
+                                    "object_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                                    "type": "Channel",
+                                    "title": "ll",
+                                    "avatar_thumbnail": {
+                                        "file_id": "88602634217110",
+                                        "mime": "jpg",
+                                        "dc_id": "846",
+                                        "access_hash_rec": "0998626527273395641776449175542026032307",
+                                    },
+                                    "is_verified": False,
+                                    "is_deleted": False,
+                                }
+                            },
+                            "updated_parameters": ["abs_object"],
+                            "timestamp": "1774284150",
+                            "type": "Channel",
+                        },
+                        "timestamp": "1774284150",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.edit_channel_info(
+            "c0DSKDg07c609895e68c2ac53ba69faa",
+            title="ll",
+            description="توضیحاتc",
+        )
+
+        assert result.channel is not None
+        assert result.channel.channel_title == "ll"
+        assert result.channel.description == "توضیحاتc"
+        assert result.channel.chat_reaction_setting is not None
+        assert result.channel.chat_reaction_setting.reaction_type == "Selected"
+        assert result.channel.chat_reaction_setting.selected_reactions == ["3", "2"]
+        assert result.chat_update is not None
+        assert result.chat_update.object_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+        assert result.chat_update.chat is not None
+        assert result.chat_update.chat.abs_object is not None
+        assert result.chat_update.chat.abs_object.avatar_thumbnail is not None
+        assert result.timestamp == "1774284150"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_edit_channel_info_accepts_peer_objects(monkeypatch):
+    async def scenario():
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        calls = []
+
+        async def fake_invoke(method):
+            calls.append(method)
+            return "ok"
+
+        client.invoke = fake_invoke  # type: ignore[method-assign]
+
+        result = await client.edit_channel_info(
+            peer=Message(object_guid="c0DSKDg07c609895e68c2ac53ba69faa"),
+            title="ll",
+            description="توضیحاتc",
+        )
+
+        assert result == "ok"
+        assert len(calls) == 1
+        assert isinstance(calls[0], EditChannelInfo)
+        assert calls[0].channel_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+        assert calls[0].updated_parameters == ["title", "description"]
+
+    asyncio.run(scenario())
+
+
+def test_edit_channel_info_requires_at_least_one_supported_field():
+    async def scenario():
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+
+        try:
+            await client.edit_channel_info("c0DSKDg07c609895e68c2ac53ba69faa")
+        except ValueError as exc:
+            assert str(exc) == "At least one supported channel field must be provided"
+        else:
+            raise AssertionError("Expected ValueError")
+
+    asyncio.run(scenario())
+
+
+def test_get_channel_admin_members_returns_typed_result(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "getChannelAdminMembers"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "in_chat_members": [
+                            {
+                                "member_type": "User",
+                                "member_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                                "first_name": "King",
+                                "is_verified": False,
+                                "is_deleted": False,
+                                "last_online": 1774284227,
+                                "join_type": "Creator",
+                                "username": "Amie6609",
+                                "online_time": {
+                                    "type": "Exact",
+                                    "exact_time": 1774284227,
+                                },
+                            }
+                        ],
+                        "next_start_id": "69c0c1472b7c9ba33d9d6f7b",
+                        "has_continue": False,
+                        "timestamp": "1774284227",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.get_channel_admin_members("c0DSKDg07c609895e68c2ac53ba69faa")
+
+        assert len(result.in_chat_members) == 1
+        assert result.in_chat_members[0].member_guid == "u0DiqTP0d4d36e090fb7060d540a33c7"
+        assert result.in_chat_members[0].join_type == "Creator"
+        assert result.in_chat_members[0].online_time is not None
+        assert result.in_chat_members[0].online_time.exact_time == 1774284227
+        assert result.next_start_id == "69c0c1472b7c9ba33d9d6f7b"
+        assert result.has_continue is False
+        assert result.timestamp == "1774284227"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_get_channel_admin_members_accepts_peer_objects(monkeypatch):
+    async def scenario():
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        calls = []
+
+        async def fake_invoke(method):
+            calls.append(method)
+            return "ok"
+
+        client.invoke = fake_invoke  # type: ignore[method-assign]
+
+        result = await client.get_channel_admin_members(peer=Message(object_guid="c0DSKDg07c609895e68c2ac53ba69faa"))
+
+        assert result == "ok"
+        assert len(calls) == 1
+        assert isinstance(calls[0], GetChannelAdminMembers)
+        assert calls[0].channel_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+
+    asyncio.run(scenario())
+
+
+def test_set_channel_admin_accepts_enum_access_list_and_returns_typed_result(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "setChannelAdmin"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                "member_guid": "u0Crz5308d9ca919827a835fac44dbae",
+                "action": "SetAdmin",
+                "access_list": [
+                    "ChangeInfo",
+                    "ViewMembers",
+                    "ViewAdmins",
+                    "PinMessages",
+                    "SendMessages",
+                    "EditAllMessages",
+                    "DeleteGlobalAllMessages",
+                    "AddMember",
+                    "SetJoinLink",
+                    "SetAdmin",
+                ],
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "in_chat_member": {
+                            "member_type": "User",
+                            "member_guid": "u0Crz5308d9ca919827a835fac44dbae",
+                            "first_name": "Ehsan Davari",
+                            "last_name": "",
+                            "is_verified": False,
+                            "is_deleted": False,
+                            "promoted_by_object_guid": "u0DiqTP0d4d36e090fb7060d540a33c7",
+                            "promoted_by_object_type": "User",
+                            "join_type": "Admin",
+                            "username": "ehsndvr",
+                            "online_time": {
+                                "type": "Approximate",
+                                "approximate_period": "Recently",
+                            },
+                        },
+                        "timestamp": "1774284282",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.set_channel_admin(
+            "c0DSKDg07c609895e68c2ac53ba69faa",
+            "u0Crz5308d9ca919827a835fac44dbae",
+            [
+                "ChangeInfo",
+                "ViewMembers",
+                "ViewAdmins",
+                GroupAdminAccess.PIN_MESSAGES,
+                "SendMessages",
+                "EditAllMessages",
+                GroupAdminAccess.DELETE_GLOBAL_ALL_MESSAGES,
+                "AddMember",
+                GroupAdminAccess.SET_JOIN_LINK,
+                GroupAdminAccess.SET_ADMIN,
+            ],
+        )
+
+        assert result.timestamp == "1774284282"
+        assert result.in_chat_member is not None
+        assert result.in_chat_member.member_guid == "u0Crz5308d9ca919827a835fac44dbae"
+        assert result.in_chat_member.join_type == "Admin"
+        assert result.in_chat_member.promoted_by_object_guid == "u0DiqTP0d4d36e090fb7060d540a33c7"
+        assert result.in_chat_member.online_time is not None
+        assert result.in_chat_member.online_time.approximate_period == "Recently"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_update_channel_admin_access_accepts_string_access_list(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "setChannelAdmin"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                "member_guid": "u0Crz5308d9ca919827a835fac44dbae",
+                "action": "SetAdmin",
+                "access_list": [
+                    "ChangeInfo",
+                    "ViewMembers",
+                    "ViewAdmins",
+                    "PinMessages",
+                    "SendMessages",
+                    "EditAllMessages",
+                    "DeleteGlobalAllMessages",
+                    "AddMember",
+                    "SetJoinLink",
+                    "SetAdmin",
+                ],
+            }
+            return encrypt_response({"status": "OK", "status_det": "OK", "data": {}}, auth)
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.update_channel_admin_access(
+            "c0DSKDg07c609895e68c2ac53ba69faa",
+            "u0Crz5308d9ca919827a835fac44dbae",
+            [
+                "ChangeInfo",
+                "ViewMembers",
+                "ViewAdmins",
+                "PinMessages",
+                "SendMessages",
+                "EditAllMessages",
+                "DeleteGlobalAllMessages",
+                "AddMember",
+                "SetJoinLink",
+                "SetAdmin",
+            ],
+        )
+
+        assert result.in_chat_member is None
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_unset_channel_admin_uses_unset_admin_action(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "setChannelAdmin"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+                "member_guid": "u0Crz5308d9ca919827a835fac44dbae",
+                "action": "UnsetAdmin",
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "in_chat_member": {
+                            "member_type": "User",
+                            "member_guid": "u0Crz5308d9ca919827a835fac44dbae",
+                            "first_name": "Ehsan Davari",
+                            "last_name": "",
+                            "is_verified": False,
+                            "is_deleted": False,
+                            "join_type": "Member",
+                            "username": "ehsndvr",
+                            "online_time": {
+                                "type": "Approximate",
+                                "approximate_period": "Recently",
+                            },
+                        },
+                        "timestamp": "1774284708",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.unset_channel_admin(
+            "c0DSKDg07c609895e68c2ac53ba69faa",
+            "u0Crz5308d9ca919827a835fac44dbae",
+        )
+
+        assert result.in_chat_member is not None
+        assert result.in_chat_member.member_guid == "u0Crz5308d9ca919827a835fac44dbae"
+        assert result.in_chat_member.join_type == "Member"
+        assert result.in_chat_member.online_time is not None
+        assert result.in_chat_member.online_time.approximate_period == "Recently"
+        assert result.timestamp == "1774284708"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_get_banned_channel_members_returns_typed_result(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "getBannedChannelMembers"
+            assert decrypted_request["input"] == {
+                "channel_guid": "c0DSKDg07c609895e68c2ac53ba69faa",
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "in_chat_members": [],
+                        "has_continue": False,
+                        "timestamp": "1774284380",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.get_banned_channel_members("c0DSKDg07c609895e68c2ac53ba69faa")
+
+        assert result.in_chat_members == []
+        assert result.has_continue is False
+        assert result.timestamp == "1774284380"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_get_banned_channel_members_accepts_peer_objects(monkeypatch):
+    async def scenario():
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        calls = []
+
+        async def fake_invoke(method):
+            calls.append(method)
+            return "ok"
+
+        client.invoke = fake_invoke  # type: ignore[method-assign]
+
+        result = await client.get_banned_channel_members(peer=Message(object_guid="c0DSKDg07c609895e68c2ac53ba69faa"))
+
+        assert result == "ok"
+        assert len(calls) == 1
+        assert isinstance(calls[0], GetBannedChannelMembers)
+        assert calls[0].channel_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+
+    asyncio.run(scenario())
+
+
 def test_get_profile_link_items_returns_typed_result(monkeypatch):
     async def scenario():
         monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
@@ -1895,6 +2533,134 @@ def test_get_profile_link_items_accepts_peer_objects(monkeypatch):
         assert len(calls) == 1
         assert isinstance(calls[0], GetProfileLinkItems)
         assert calls[0].object_guid == "c0DSKDg07c609895e68c2ac53ba69faa"
+
+    asyncio.run(scenario())
+
+
+def test_search_global_objects_returns_typed_result(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("bxmalqzstnqidtoikvoxjwcuhxrmescj")
+
+        async def send_payload(payload):
+            auth = await client.storage.auth()
+            decrypted_request = client._decrypt_response({"data_enc": payload["data_enc"]}, auth)
+            assert decrypted_request["method"] == "searchGlobalObjects"
+            assert decrypted_request["input"] == {
+                "search_text": "Ehsan",
+                "filter_types": ["Bot"],
+            }
+            return encrypt_response(
+                {
+                    "status": "OK",
+                    "status_det": "OK",
+                    "data": {
+                        "objects": [
+                            {
+                                "object_guid": "b0NMS0012c504de75ddb83f3bbc00f21",
+                                "type": "Bot",
+                                "title": "Ehsan",
+                                "is_verified": False,
+                                "is_deleted": False,
+                                "username": "ehsan007_fun_bot",
+                                "track_id": "searchBackend*2",
+                            },
+                            {
+                                "object_guid": "c0BwPAt02388b73779f96b2cbc483f64",
+                                "type": "Channel",
+                                "title": "احسان باکستر | Ehsan Boxter",
+                                "avatar_thumbnail": {
+                                    "file_id": "38362377284747",
+                                    "mime": "jpg",
+                                    "dc_id": "865",
+                                    "access_hash_rec": "2979188977369059586422992546152024040402",
+                                },
+                                "is_verified": True,
+                                "is_deleted": False,
+                                "count_members": 9175,
+                                "username": "ehsanboxter",
+                                "track_id": "{'l': 'messenger', 'svc': 'search_channel', 'm': 'search', 's': 'Ehsan', 'r': 0, 'ref': '26839627'}",
+                            },
+                        ],
+                        "has_continue": False,
+                        "timestamp": "1774284489",
+                    },
+                },
+                auth,
+            )
+
+        client._transport.send_payload = send_payload  # type: ignore[method-assign]
+
+        result = await client.search_global_objects("Ehsan", filter_types=["Bot"])
+
+        assert len(result.objects) == 2
+        assert result.objects[0].object_guid == "b0NMS0012c504de75ddb83f3bbc00f21"
+        assert result.objects[0].type == "Bot"
+        assert result.objects[0].title == "Ehsan"
+        assert result.objects[1].type == "Channel"
+        assert result.objects[1].avatar_thumbnail is not None
+        assert result.objects[1].avatar_thumbnail.file_id == "38362377284747"
+        assert result.objects[1].count_members == 9175
+        assert result.has_continue is False
+        assert result.timestamp == "1774284489"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_search_global_objects_avatar_thumbnail_downloads(monkeypatch):
+    async def scenario():
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        payload = {
+            "objects": [
+                {
+                    "object_guid": "c0BwPAt02388b73779f96b2cbc483f64",
+                    "type": "Channel",
+                    "title": "احسان باکستر | Ehsan Boxter",
+                    "avatar_thumbnail": {
+                        "file_id": "38362377284747",
+                        "mime": "jpg",
+                        "dc_id": "865",
+                        "access_hash_rec": "2979188977369059586422992546152024040402",
+                    },
+                    "is_verified": True,
+                    "is_deleted": False,
+                    "count_members": 9175,
+                    "username": "ehsanboxter",
+                    "track_id": "searchBackend*channel",
+                }
+            ],
+            "has_continue": False,
+            "timestamp": "1774284489",
+        }
+        result = client.raw.methods.SearchGlobalObjects(search_text="Ehsan", filter_types=["Bot"]).parse_response(client, payload)
+        calls = []
+
+        async def fake_download_file(self, file, path=None, in_memory=False, file_name=None, progress=None, progress_args=()):
+            calls.append(
+                {
+                    "file_id": getattr(file, "file_id", None),
+                    "in_memory": in_memory,
+                    "file_name": file_name,
+                }
+            )
+            return b"ok"
+
+        monkeypatch.setattr(Client, "download_file", fake_download_file)
+
+        content = await result.objects[0].avatar_thumbnail.download(in_memory=True, file_name="search-avatar.jpg")  # type: ignore[union-attr]
+
+        assert content == b"ok"
+        assert calls == [
+            {
+                "file_id": "38362377284747",
+                "in_memory": True,
+                "file_name": "search-avatar.jpg",
+            }
+        ]
 
     asyncio.run(scenario())
 

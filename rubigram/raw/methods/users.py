@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict
 
 from rubigram.raw.base import RawMethod
-from rubigram.types import ChatAvatars, ContactsLastOnline, ObjectByUsername, ProfileLinkItems, RawObject, UserInfo
+from rubigram.types import ChatAvatars, ContactsLastOnline, ObjectByUsername, ProfileLinkItems, RawObject, SearchGlobalObjectsResult, UserInfo
 
 if TYPE_CHECKING:
     import rubigram
@@ -161,3 +161,26 @@ class GetProfileLinkItems(RawMethod[ProfileLinkItems]):
 
     def parse_response(self, client: "rubigram.Client", data: Any) -> ProfileLinkItems:
         return ProfileLinkItems._parse(client, data)
+
+
+@dataclass
+class SearchGlobalObjects(RawMethod[SearchGlobalObjectsResult]):
+    """
+    Search global users, bots, channels, and groups.
+
+    Requires authentication.
+    """
+
+    search_text: str
+    filter_types: list[str]
+
+    method_name = "searchGlobalObjects"
+
+    def to_input(self) -> Dict[str, Any]:
+        return {
+            "search_text": self.search_text,
+            "filter_types": self.filter_types,
+        }
+
+    def parse_response(self, client: "rubigram.Client", data: Any) -> SearchGlobalObjectsResult:
+        return SearchGlobalObjectsResult._parse(client, data)

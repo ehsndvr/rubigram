@@ -136,6 +136,29 @@ Returned object:
 - `ObjectByUsername.timestamp`
 - `ObjectByUsername.is_in_contact`
 
+### `await app.search_global_objects(search_text, filter_types=()) -> SearchGlobalObjectsResult`
+Searches global users, bots, channels, and other public objects.
+
+Input:
+- `search_text` is the query text
+- `filter_types` is sent as a list of raw string filter names such as `Bot`
+
+Returned object:
+- `SearchGlobalObjectsResult.objects`
+- `SearchGlobalObjectsResult.has_continue`
+- `SearchGlobalObjectsResult.timestamp`
+
+Common nested payload:
+- `object.object_guid`
+- `object.type`
+- `object.title`
+- `object.avatar_thumbnail`
+- `object.username`
+- `object.track_id`
+
+Download helpers:
+- `await result.objects[i].avatar_thumbnail.download(...)`
+
 ### `await app.get_avatars(object_guid: str) -> ChatAvatars`
 Returns avatars for a user or chat.
 
@@ -157,6 +180,20 @@ Current status:
 - implemented
 - still returned as `RawObject`
 - can be typed further later
+
+### `await app.get_contacts_updates(state: int) -> ContactsUpdates`
+Polls `getContactsUpdates`.
+
+Returned object:
+- `ContactsUpdates.users`
+- `ContactsUpdates.deleted_users`
+- `ContactsUpdates.new_state`
+- `ContactsUpdates.status`
+- `ContactsUpdates.timestamp`
+
+Notes:
+- this wrapper currently requires an explicit `state`
+- unlike `get_chats_updates(...)`, it does not yet persist contact-update state in storage
 
 ### `await app.get_contacts_last_online(user_guids) -> ContactsLastOnline`
 Returns last-online metadata for multiple users in one request.
@@ -266,6 +303,18 @@ Notes:
 Alias:
 - `await app.create_channel(title, description="", channel_type="Private", member_guids=None, *, thumbnail_file_id, main_file_id)`
 
+### `await app.add_channel_members(object_guid, member_guids, *, peer=None) -> AddChannelMembersResult`
+Adds users, bots, or peer-like objects to an existing channel.
+
+Returned object:
+- `AddChannelMembersResult.added_in_chat_members`
+- `AddChannelMembersResult.channel`
+- `AddChannelMembersResult.timestamp`
+
+Notes:
+- `object_guid` can be the channel guid directly or provided via `peer=`
+- each entry in `member_guids` is resolved through the same peer-aware rules used elsewhere in the client
+
 ### `await app.get_channel_link(object_guid, *, peer=None) -> Empty`
 Fetches the current channel-link payload for the target channel.
 
@@ -315,6 +364,80 @@ Member fields commonly returned:
 - `member.username`
 - `member.join_type`
 - `member.online_time`
+
+### `await app.get_channel_admin_members(object_guid, *, peer=None) -> GroupMembers`
+Returns the current admin members visible in a channel.
+
+Returned object:
+- `GroupMembers.in_chat_members`
+- `GroupMembers.next_start_id`
+- `GroupMembers.has_continue`
+- `GroupMembers.timestamp`
+
+Member fields commonly returned:
+- `member.member_type`
+- `member.member_guid`
+- `member.first_name`
+- `member.username`
+- `member.join_type`
+- `member.online_time`
+
+### `await app.get_banned_channel_members(object_guid, *, peer=None) -> GroupMembers`
+Returns the current banned members visible in a channel.
+
+Returned object:
+- `GroupMembers.in_chat_members`
+- `GroupMembers.has_continue`
+- `GroupMembers.timestamp`
+
+### `await app.edit_channel_info(object_guid, *, peer=None, title=None, description=None) -> EditChannelInfoResult`
+Edits the currently supported mutable channel info fields.
+
+Currently supported fields:
+- `title`
+- `description`
+
+What this method does:
+- builds the `updated_parameters` array automatically
+- sends only the fields you explicitly provide
+
+Returned object:
+- `EditChannelInfoResult.channel`
+- `EditChannelInfoResult.chat_update`
+- `EditChannelInfoResult.timestamp`
+
+Common nested payload:
+- `channel.channel_title`
+- `channel.description`
+- `channel.chat_reaction_setting`
+- `chat_update.chat.abs_object`
+
+Validation behavior:
+- if neither supported field is provided, Rubigram raises `ValueError`
+
+### `await app.set_channel_admin(object_guid, member_guid, access_list, *, peer=None) -> SetGroupAdminResult`
+Promotes a member to channel admin or updates that admin's access list.
+
+What this method does:
+- resolves the target channel from `object_guid` or `peer=`
+- resolves the target member from `member_guid`
+- sends `setChannelAdmin` with `action="SetAdmin"`
+
+Returned object:
+- `SetGroupAdminResult.in_chat_member`
+- `SetGroupAdminResult.timestamp`
+
+Access list typing:
+- enum values such as `rubigram.enums.GroupAdminAccess` are accepted
+- raw string access names are also accepted for compatibility
+
+Aliases:
+- `await app.update_channel_admin_access(object_guid, member_guid, access_list, *, peer=None)`
+- `await app.unset_channel_admin(object_guid, member_guid, *, peer=None)`
+
+Notes:
+- `unset_channel_admin(...)` uses the same RPC method with `action="UnsetAdmin"`
+- based on the confirmed sample you provided, `UnsetAdmin` can still return a populated `in_chat_member` plus `timestamp`
 
 ## Groups
 
