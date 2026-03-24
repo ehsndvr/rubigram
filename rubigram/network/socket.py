@@ -91,8 +91,6 @@ class SocketTransport:
                     url,
                     origin=self.ORIGIN,
                     user_agent_header=self.USER_AGENT,
-                    additional_headers=build_websocket_headers(),
-                    proxy=None,
                     open_timeout=self._timeout,
                     close_timeout=self._timeout,
                 )

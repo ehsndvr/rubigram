@@ -12,13 +12,10 @@ CHROME_USER_AGENT = (
 
 BASE_BROWSER_HEADERS: Dict[str, str] = {
     "accept": "application/json, text/plain, */*",
+    "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "en-US,en;q=0.9,fa;q=0.8,tr;q=0.7",
     "cache-control": "no-cache",
     "pragma": "no-cache",
-    "priority": "u=1, i",
-    "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
     "user-agent": CHROME_USER_AGENT,
 }
 
@@ -54,13 +51,10 @@ def build_discovery_headers() -> Dict[str, str]:
 
 def build_websocket_headers() -> Dict[str, str]:
     return {
+        "accept-encoding": BASE_BROWSER_HEADERS['accept-encoding'],
         "accept-language": BASE_BROWSER_HEADERS["accept-language"],
         "cache-control": BASE_BROWSER_HEADERS["cache-control"],
         "pragma": BASE_BROWSER_HEADERS["pragma"],
-        "priority": BASE_BROWSER_HEADERS["priority"],
-        "sec-ch-ua": BASE_BROWSER_HEADERS["sec-ch-ua"],
-        "sec-ch-ua-mobile": BASE_BROWSER_HEADERS["sec-ch-ua-mobile"],
-        "sec-ch-ua-platform": BASE_BROWSER_HEADERS["sec-ch-ua-platform"],
         "referer": WEB_REFERER,
     }
 
