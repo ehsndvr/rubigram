@@ -1,0 +1,22 @@
+[
+  {
+    "method": "getJoinLinks",
+    "input": {
+      "object_guid": "g0EXAMPLE00000000000000000000007"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "join_links": []
+    }
+  }
+]

@@ -1,0 +1,25 @@
+[
+  {
+    "method": "getChatsUpdates",
+    "input": {
+      "state": 1773595399
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "chats": [],
+      "new_state": 1773595460,
+      "status": "OK",
+      "timestamp": "1773595520"
+    }
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "method": "addChannel",
+    "input": {
+      "title": "Sample title",
+      "description": "Sample description",
+      "channel_type": "Private",
+      "member_guids": [
+        "u0EXAMPLE00000000000000000000001"
+      ],
+      "thumbnail_file_id": "88602634217110",
+      "main_file_id": "88602629903555"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "channel": {
+        "channel_guid": "c0EXAMPLE00000000000000000000003",
+        "channel_title": "Sample channel",
+        "avatar_thumbnail": {
+          "file_id": "88602634217110",
+          "mime": "jpg",
+          "dc_id": "846",
+          "access_hash_rec": "ACCESS_HASH_REMOVED"
+        },
+        "count_members": 2,
+        "description": "Sample description",
+        "is_deleted": false,
+        "is_verified": false,
+        "channel_type": "Private",
+        "sign_messages": false,
+        "chat_reaction_setting": {
+          "reaction_type": "Disabled"
+        },
+        "is_restricted_content": false
+      },
+      "chat_update": {
+        "object_guid": "c0EXAMPLE00000000000000000000003",
+        "action": "New",
+        "chat": {
+          "object_guid": "c0EXAMPLE00000000000000000000003",
+          "access": [
+            "ChangeInfo",
+            "ViewMembers",
+            "ViewAdmins",
+            "PinMessages",
+            "SendMessages",
+            "EditAllMessages",
+            "DeleteGlobalAllMessages",
+            "AddMember",
+            "SetAdmin",
+            "SetJoinLink",
+            "SuperAdmin",
+            "RemoveObject",
+            "ViewInfo",
+            "ViewMessages"
+          ],
+          "count_unseen": 1,
+          "is_mute": false,
+          "is_pinned": false,
+          "time_string": "177424007100001571706695825913",
+          "last_message": {
+            "message_id": "1571706695825913",
+            "type": "Other",
+            "text": "sample text",
+            "is_mine": false
+          },
+          "last_seen_my_mid": "0",
+          "last_seen_peer_mid": "0",
+          "status": "Active",
+          "time": 1774240071,
+          "abs_object": {
+            "object_guid": "c0EXAMPLE00000000000000000000003",
+            "type": "Channel",
+            "title": "Sample title",
+            "avatar_thumbnail": {
+              "file_id": "88602634217110",
+              "mime": "jpg",
+              "dc_id": "846",
+              "access_hash_rec": "ACCESS_HASH_REMOVED"
+            },
+            "is_verified": false,
+            "is_deleted": false
+          },
+          "is_blocked": false,
+          "last_message_id": "1571706695825913",
+          "last_deleted_mid": "0",
+          "show_ask_spam": false,
+          "auto_delete": "Off"
+        },
+        "updated_parameters": [],
+        "timestamp": "1774240071",
+        "type": "Channel"
+      },
+      "message_update": {
+        "message_id": "1571706695825913",
+        "action": "New",
+        "message": {
+          "message_id": "1571706695825913",
+          "text": "sample text",
+          "time": "1774240071",
+          "is_edited": false,
+          "type": "Event",
+          "event_data": {
+            "type": "ChannelCreated",
+            "title": "Sample title"
+          },
+          "allow_transcription": false
+        },
+        "updated_parameters": [],
+        "timestamp": "1774240071",
+        "prev_message_id": "0",
+        "object_guid": "c0EXAMPLE00000000000000000000003",
+        "type": "Channel",
+        "state": "1774240011",
+        "is_scheduled": false
+      },
+      "timestamp": "1774240071"
+    }
+  }
+]

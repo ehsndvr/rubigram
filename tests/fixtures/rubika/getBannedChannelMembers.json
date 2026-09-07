@@ -1,0 +1,24 @@
+[
+  {
+    "method": "getBannedChannelMembers",
+    "input": {
+      "channel_guid": "c0EXAMPLE00000000000000000000003"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "in_chat_members": [],
+      "has_continue": false,
+      "timestamp": "1774284380"
+    }
+  }
+]

@@ -1,0 +1,27 @@
+[
+  {
+    "method": "requestSendFile",
+    "input": {
+      "file_name": "2026-03-15T18:26:04.799Z.ogg",
+      "size": 1654,
+      "mime": "ogg"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "id": "87998036915657",
+      "dc_id": "491",
+      "access_hash_send": "ACCESS_HASH_REMOVED",
+      "upload_url": "https://upmessenger491.iranlms.ir/UploadFile.ashx"
+    }
+  }
+]

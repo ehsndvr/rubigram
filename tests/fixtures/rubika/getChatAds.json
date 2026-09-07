@@ -1,0 +1,61 @@
+[
+  {
+    "method": "getChatAds",
+    "input": {
+      "state": 1773592237
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "chat_ads": [
+        {
+          "chat_ads_id": "pro_634bfbae7c7c2887da23cf7d",
+          "link": {
+            "type": "joinchannel",
+            "joinchannel_data": {
+              "username": "sample_user",
+              "ask_join": "true"
+            }
+          },
+          "title": "Sample title",
+          "text": "sample text",
+          "image": {
+            "file_id": "87924012924119",
+            "mime": "jpg",
+            "dc_id": "32",
+            "access_hash_rec": "ACCESS_HASH_REMOVED",
+            "cdn_tag": "PR18"
+          },
+          "notice_text": "",
+          "notice_color": {
+            "red": 113,
+            "blue": 120,
+            "green": 117,
+            "alpha": 255
+          },
+          "has_action": true,
+          "action_text": "ورود",
+          "action_background_color": {
+            "red": 0,
+            "blue": 145,
+            "green": 212,
+            "alpha": 255
+          },
+          "force_show": true
+        }
+      ],
+      "new_state": 1773595459,
+      "apply_ads": true,
+      "next_call_period": 90
+    }
+  }
+]

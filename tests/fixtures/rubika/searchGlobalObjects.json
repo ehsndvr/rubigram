@@ -1,0 +1,62 @@
+[
+  {
+    "method": "searchGlobalObjects",
+    "input": {
+      "search_text": "sample",
+      "filter_types": [
+        "Bot"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "objects": [
+        {
+          "object_guid": "b0EXAMPLE00000000000000000000004",
+          "type": "Bot",
+          "title": "Sample title",
+          "is_verified": false,
+          "is_deleted": false,
+          "username": "sample_user",
+          "track_id": "searchBackend*1"
+        },
+        {
+          "object_guid": "b0EXAMPLE00000000000000000000005",
+          "type": "Bot",
+          "title": "Sample title",
+          "is_verified": false,
+          "is_deleted": false,
+          "username": "sample_user",
+          "track_id": "searchBackend*2"
+        },
+        {
+          "object_guid": "c0EXAMPLE00000000000000000000006",
+          "type": "Channel",
+          "title": "Sample title",
+          "avatar_thumbnail": {
+            "file_id": "38362377284747",
+            "mime": "jpg",
+            "dc_id": "865",
+            "access_hash_rec": "ACCESS_HASH_REMOVED"
+          },
+          "is_verified": true,
+          "is_deleted": false,
+          "count_members": 9175,
+          "username": "sample_user",
+          "track_id": "{'l': 'messenger', 'svc': 'search_channel', 'm': 'search', 's': 'Ehsan', 'r': 0, 'ref': '26839627'}"
+        }
+      ],
+      "has_continue": false,
+      "timestamp": "1774284489"
+    }
+  }
+]

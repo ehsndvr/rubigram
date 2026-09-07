@@ -1,0 +1,39 @@
+[
+  {
+    "method": "seenChats",
+    "input": {
+      "seen_list": {
+        "u0EXAMPLE00000000000000000000001": "1556351220500832"
+      }
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "chat_updates": [
+        {
+          "object_guid": "u0EXAMPLE00000000000000000000001",
+          "action": "Edit",
+          "chat": {
+            "count_unseen": 0,
+            "last_seen_my_mid": "1556351220500832"
+          },
+          "updated_parameters": [
+            "last_seen_my_mid",
+            "count_unseen"
+          ],
+          "timestamp": "1773596166",
+          "type": "User"
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "method": "getMessagesInterval",
+    "input": {
+      "object_guid": "u0EXAMPLE00000000000000000000001",
+      "middle_message_id": 248215745402832
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "messages": [
+        {
+          "message_id": "216032502242832",
+          "text": "sample text",
+          "time": "1646209776",
+          "is_edited": false,
+          "type": "Text",
+          "author_type": "User",
+          "author_object_guid": "u0EXAMPLE00000000000000000000002",
+          "allow_transcription": false
+        },
+        {
+          "message_id": "216357682495832",
+          "text": "sample text",
+          "time": "1646283895",
+          "is_edited": false,
+          "type": "Text",
+          "author_type": "User",
+          "author_object_guid": "u0EXAMPLE00000000000000000000001",
+          "allow_transcription": false
+        },
+        {
+          "message_id": "248215745402832",
+          "text": "sample text",
+          "time": "1654678430",
+          "is_edited": false,
+          "type": "Text",
+          "author_type": "User",
+          "author_object_guid": "u0EXAMPLE00000000000000000000002",
+          "allow_transcription": false
+        }
+      ],
+      "state": "1773596092",
+      "new_has_continue": true,
+      "old_has_continue": true,
+      "new_min_id": 248215745402833,
+      "old_max_id": 216032502242831,
+      "timestamp": "1773596152"
+    }
+  }
+]

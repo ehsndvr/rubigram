@@ -1,0 +1,28 @@
+[
+  {
+    "method": "requestChangeObjectOwner",
+    "input": {
+      "object_guid": "g0EXAMPLE00000000000000000000007",
+      "new_owner_user_guid": "u0EXAMPLE00000000000000000000001"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "ERROR_GENERIC",
+    "status_det": "INVALID_AUTH",
+    "client_show_message": {
+      "link": {
+        "type": "alert",
+        "alert_data": {
+          "message": "از زمان ورود شما بایستی 3 روز گذشته باشد."
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,55 @@
+[
+  {
+    "method": "getAvatars",
+    "input": {
+      "object_guid": "u0EXAMPLE00000000000000000000012"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "avatars": [
+        {
+          "avatar_id": "68761b439692781e8a713cde",
+          "thumbnail": {
+            "file_id": "70751777394204",
+            "mime": "jpg",
+            "dc_id": "930",
+            "access_hash_rec": "ACCESS_HASH_REMOVED"
+          },
+          "main": {
+            "file_id": "70751782662863",
+            "mime": "jpg",
+            "dc_id": "845",
+            "access_hash_rec": "ACCESS_HASH_REMOVED"
+          },
+          "create_time": 1752570691
+        },
+        {
+          "avatar_id": "68578e68829a00497df4e530",
+          "thumbnail": {
+            "file_id": "68868888499612",
+            "mime": "jpg",
+            "dc_id": "924",
+            "access_hash_rec": "ACCESS_HASH_REMOVED"
+          },
+          "main": {
+            "file_id": "68868891395818",
+            "mime": "jpg",
+            "dc_id": "915",
+            "access_hash_rec": "ACCESS_HASH_REMOVED"
+          },
+          "create_time": 1750568552
+        }
+      ]
+    }
+  }
+]

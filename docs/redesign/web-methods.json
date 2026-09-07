@@ -1,0 +1,1841 @@
+{
+  "source": "web.rubika.ir main bundle, app_version 4.4.34, captured 2026-09-07",
+  "methods": [
+    {
+      "method": "getDCs",
+      "category": "discovery",
+      "input": "{} (api_version 4, plain JSON, no auth)",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "Response: default_api_urls[3], default_sockets[3], storages{dc_id: GetFile.ashx URL}(822), default_cdn_urls{tag: [urls]}",
+      "sample": false
+    },
+    {
+      "method": "getBaseInfo",
+      "category": "discovery",
+      "input": "{} (api_version 0, plain JSON, services base, platform PWA)",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "suggested_urls.suggested_rubino replaces the rubino DC list",
+      "sample": false
+    },
+    {
+      "method": "handShake",
+      "category": "socket",
+      "input": "{\"api_version\":\"5\",\"auth\":<auth>,\"data\":\"\",\"method\":\"handShake\"}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "Ping is the literal {} 30 s after the last frame; reconnect if silent for 20 s; retry 5 s after close",
+      "sample": false
+    },
+    {
+      "method": "sendCode",
+      "category": "auth",
+      "input": "dyn: {phone_number, send_type} (not_authorized, api_version 6, tmp_session)",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "Web sends the model built by the login form; send_type SMS/Internal",
+      "sample": false
+    },
+    {
+      "method": "signIn",
+      "category": "auth",
+      "input": "dyn: {phone_number, phone_code_hash, phone_code, public_key} (not_authorized, api_version 6)",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "public_key = changeAuthType(base64(PEM)) of a fresh RSA-1024 key; response auth is RSA-decrypted with the private key",
+      "sample": false
+    },
+    {
+      "method": "registerDevice",
+      "category": "auth",
+      "input": "{token_type:\"Web\", token:\"\", app_version:\"WB_4.4.34\", lang_code, system_version, device_model, device_hash}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "rubigram sends WB_4.4.27; device_hash = mimeTypes.length + digits(userAgent); PWA skips it",
+      "sample": false
+    },
+    {
+      "method": "unregisterDevice",
+      "category": "auth",
+      "input": "dyn: device descriptor (not_encrypt)",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "logout",
+      "category": "auth",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getTime",
+      "category": "auth",
+      "input": "{} (try_count 3)",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Server time offset used for message ordering",
+      "sample": false
+    },
+    {
+      "method": "loginTwoStepForgetPassword",
+      "category": "auth",
+      "input": "{phone_number} (not_authorized)",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "loginDisableTwoStep",
+      "category": "auth",
+      "input": "dyn (not_authorized)",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getMySessions",
+      "category": "sessions",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Active sessions list (view only)",
+      "sample": false
+    },
+    {
+      "method": "terminateSession",
+      "category": "sessions",
+      "input": "{session_key}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "terminateOtherSessions",
+      "category": "sessions",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getUnconfirmedSessions",
+      "category": "sessions",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: unconfirmed_sessions",
+      "sample": false
+    },
+    {
+      "method": "actionOnUnconfirmedSession",
+      "category": "sessions",
+      "input": "{unconfirmed_session_key, action}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getTwoPasscodeStatus",
+      "category": "security",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: two_step_status",
+      "sample": false
+    },
+    {
+      "method": "setupTwoStepVerification",
+      "category": "security",
+      "input": "dyn: {password, hint, recovery_email?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "checkTwoStepPasscode",
+      "category": "security",
+      "input": "{password}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "changePassword",
+      "category": "security",
+      "input": "dyn: {password, new_password, new_hint}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "turnOffTwoStep",
+      "category": "security",
+      "input": "{password}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "requestRecoveryEmail",
+      "category": "security",
+      "input": "dyn: {password, recovery_email}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "verifyRecoveryEmail",
+      "category": "security",
+      "input": "dyn: {password, code}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response status \"IsValid\"",
+      "sample": false
+    },
+    {
+      "method": "resendCodeRecoveryEmail",
+      "category": "security",
+      "input": "{password}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "abortSetRecoveryEmail",
+      "category": "security",
+      "input": "{password}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "abortTwoStepSetup",
+      "category": "security",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "requestChangePhoneNumber",
+      "category": "security",
+      "input": "{new_phone_number}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "verifyChangePhoneNumber",
+      "category": "security",
+      "input": "{code, hash}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "requestDeleteAccount",
+      "category": "security",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getPrivacySetting",
+      "category": "settings",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: privacy_setting",
+      "sample": false
+    },
+    {
+      "method": "getUserSetting",
+      "category": "settings",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "setSetting",
+      "category": "settings",
+      "input": "{settings:{...}, update_parameters:[...]}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Privacy and notification settings",
+      "sample": false
+    },
+    {
+      "method": "getAppearanceSetting",
+      "category": "settings",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getChats",
+      "category": "chats",
+      "input": "{start_id}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Dialog list pagination",
+      "sample": false
+    },
+    {
+      "method": "getChatsUpdates",
+      "category": "chats",
+      "input": "{state}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "Response status \"OldState\" means the state is stale: the client must reload with getChats; rubigram ignores it",
+      "sample": true
+    },
+    {
+      "method": "getChatsByID",
+      "category": "chats",
+      "input": "{object_guids}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getAbsObjects",
+      "category": "chats",
+      "input": "{objects_guids: [...50 max]}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Abstract objects (title/avatar) for any guid",
+      "sample": false
+    },
+    {
+      "method": "seenChats",
+      "category": "chats",
+      "input": "{seen_list: {object_guid: message_id}}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "setActionChat",
+      "category": "chats",
+      "input": "{object_guid, action, duration?}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Mute/Unmute/Pin/Unpin/Archive style actions",
+      "sample": false
+    },
+    {
+      "method": "setChatUseTime",
+      "category": "chats",
+      "input": "{object_guid, time}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "deleteUserChat",
+      "category": "chats",
+      "input": "{user_guid, last_deleted_message_id}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "deleteChatHistory",
+      "category": "chats",
+      "input": "{object_guid, last_message_id}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "deleteBotChat",
+      "category": "chats",
+      "input": "{bot_guid, last_deleted_message_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "deleteServiceChat",
+      "category": "chats",
+      "input": "{service_guid, last_deleted_message_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "deleteNoAccessGroupChat",
+      "category": "chats",
+      "input": "{group_guid}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getChatAds",
+      "category": "chats",
+      "input": "{state}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "setAskSpamAction",
+      "category": "chats",
+      "input": "dyn: {object_guid, action}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "reportObject",
+      "category": "chats",
+      "input": "dyn: {object_guid, report_type, report_description?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getCommonGroups",
+      "category": "chats",
+      "input": "{user_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: abs_groups",
+      "sample": false
+    },
+    {
+      "method": "getRelatedObjects",
+      "category": "chats",
+      "input": "{object_guid, start_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "clickMessageUrl",
+      "category": "chats",
+      "input": "dyn: {object_guid, message_id, link_url}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getMessageShareUrl",
+      "category": "chats",
+      "input": "{object_guid, message_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getLinkFromAppUrl",
+      "category": "chats",
+      "input": "{app_url}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getlinkObject",
+      "category": "chats",
+      "input": "{share_string} (panel.iranlms.ir)",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getBarcodeAction",
+      "category": "chats",
+      "input": "dyn (barcode.iranlms.ir, api_version 0, plain JSON)",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "sendMessage",
+      "category": "messages",
+      "input": "{object_guid, rnd, text?, reply_to_message_id?, metadata?, file_inline?, sticker?, location?, aux_data?, is_mute?}",
+      "rubigram": "partial",
+      "priority": "P0",
+      "note": "rubigram lacks sticker/location/aux_data/is_mute; sample recorded",
+      "sample": true
+    },
+    {
+      "method": "editMessage",
+      "category": "messages",
+      "input": "dyn: {object_guid, message_id, text, metadata?}",
+      "rubigram": "raw",
+      "priority": "P0",
+      "note": "rubigram omits metadata",
+      "sample": false
+    },
+    {
+      "method": "deleteMessages",
+      "category": "messages",
+      "input": "dyn: {object_guid, message_ids, type:\"Global\"|\"Local\"}",
+      "rubigram": "wrong",
+      "priority": "P0",
+      "note": "rubigram calls a non-existent deleteMessage with one message_id",
+      "sample": false
+    },
+    {
+      "method": "forwardMessages",
+      "category": "messages",
+      "input": "dyn: {from_object_guid, to_object_guid, message_ids, rnd}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: message_updates list",
+      "sample": false
+    },
+    {
+      "method": "getMessages",
+      "category": "messages",
+      "input": "{object_guid, max_id|min_id, sort:\"FromMax\"|\"FromMin\", limit, filter_type?}",
+      "rubigram": "wrong",
+      "priority": "P0",
+      "note": "rubigram sends offset/limit which the server does not use; response: messages, has_continue",
+      "sample": false
+    },
+    {
+      "method": "getMessagesByID",
+      "category": "messages",
+      "input": "{object_guid, message_ids}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getMessagesInterval",
+      "category": "messages",
+      "input": "{object_guid, middle_message_id, filter_type?}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getMessagesUpdates",
+      "category": "messages",
+      "input": "{object_guid, state}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: status (\"OldState\" = reset), new_state, updated_messages",
+      "sample": false
+    },
+    {
+      "method": "setPinMessage",
+      "category": "messages",
+      "input": "dyn: {object_guid, message_id, action:\"Pin\"|\"Unpin\"}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "searchChatMessages",
+      "category": "messages",
+      "input": "dyn: {object_guid, search_text, type:\"Text\"|\"Hashtag\"}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: message_ids",
+      "sample": false
+    },
+    {
+      "method": "searchGlobalMessages",
+      "category": "messages",
+      "input": "{search_text, type:\"Text\"|\"Hashtag\", start_id}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: messages",
+      "sample": false
+    },
+    {
+      "method": "sendChatActivity",
+      "category": "messages",
+      "input": "{object_guid, activity:\"Typing\"|\"Recording\"|\"Uploading\"} (try_count 0)",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getGroupMessageReadParticipants",
+      "category": "messages",
+      "input": "{group_guid, message_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "transcribeVoice",
+      "category": "messages",
+      "input": "{message_id, object_guid}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getTranscription",
+      "category": "messages",
+      "input": "{transcription_id, message_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "actionOnMessageReaction",
+      "category": "reactions",
+      "input": "dyn: {object_guid, message_id, reaction_id, action:\"Add\"|\"Remove\"}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: reactions",
+      "sample": false
+    },
+    {
+      "method": "getMessageReactions",
+      "category": "reactions",
+      "input": "dyn: {object_guid, message_id, reaction_id?, start_id?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: user_message_reactions",
+      "sample": false
+    },
+    {
+      "method": "getChatReaction",
+      "category": "reactions",
+      "input": "dyn: {object_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getAvailableReactions",
+      "category": "reactions",
+      "input": "{}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "createPoll",
+      "category": "polls",
+      "input": "dyn: {object_guid, question, options, type, is_anonymous, allows_multiple_answers, correct_option_index?, explanation?, rnd}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "votePoll",
+      "category": "polls",
+      "input": "{poll_id, selection_index}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getPollStatus",
+      "category": "polls",
+      "input": "{poll_id}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getPollOptionVoters",
+      "category": "polls",
+      "input": "{poll_id, selection_index, start_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getAllDrafts",
+      "category": "drafts",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: draft_messages",
+      "sample": false
+    },
+    {
+      "method": "clearDrafts",
+      "category": "drafts",
+      "input": "{action:\"All\"|..., object_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "sendMessageAPICall",
+      "category": "bots",
+      "input": "dyn (dc_type bot)",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Bot inline-button API calls; response: message_updates",
+      "sample": false
+    },
+    {
+      "method": "requestSendFile",
+      "category": "files",
+      "input": "{file_name, size, mime (extension)}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded; upload_url, id, dc_id, access_hash_send",
+      "sample": true
+    },
+    {
+      "method": "uploadAvatar",
+      "category": "files",
+      "input": "dyn: {object_guid, thumbnail_file_id, main_file_id}",
+      "rubigram": "wrong",
+      "priority": "P0",
+      "note": "rubigram calls a non-existent uploadNewGroupAvatar with file_id/dc_id/access_hash_rec",
+      "sample": false
+    },
+    {
+      "method": "deleteAvatar",
+      "category": "files",
+      "input": "{object_guid, avatar_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getAvatars",
+      "category": "files",
+      "input": "{object_guid}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "addSetWallpaper",
+      "category": "files",
+      "input": "{thumbnail_file_id, main_file_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getWallpapers",
+      "category": "files",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "resetWallpapers",
+      "category": "files",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getUserInfo",
+      "category": "users",
+      "input": "{user_guid}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getObjectByUsername",
+      "category": "users",
+      "input": "{username}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "updateProfile",
+      "category": "users",
+      "input": "{first_name?, last_name?, bio?, birth_date?, updated_parameters:[...]}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: user",
+      "sample": false
+    },
+    {
+      "method": "updateUsername",
+      "category": "users",
+      "input": "{username}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "checkUserUsername",
+      "category": "users",
+      "input": "{username}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: exist",
+      "sample": false
+    },
+    {
+      "method": "setBlockUser",
+      "category": "users",
+      "input": "{user_guid, action:\"Block\"|\"Unblock\"}",
+      "rubigram": "wrong",
+      "priority": "P0",
+      "note": "rubigram calls non-existent blockUser/unblockUser with object_guid",
+      "sample": false
+    },
+    {
+      "method": "getBlockedUsers",
+      "category": "users",
+      "input": "{start_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getContacts",
+      "category": "users",
+      "input": "{start_id}",
+      "rubigram": "wrong",
+      "priority": "P0",
+      "note": "rubigram sends offset/limit",
+      "sample": false
+    },
+    {
+      "method": "getContactsUpdates",
+      "category": "users",
+      "input": "{state}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getContactsLastOnline",
+      "category": "users",
+      "input": "{user_guids}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "addAddressBook",
+      "category": "users",
+      "input": "dyn: {phone, first_name, last_name}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: user",
+      "sample": false
+    },
+    {
+      "method": "deleteContact",
+      "category": "users",
+      "input": "{user_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "resetContacts",
+      "category": "users",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getProfileLinkItems",
+      "category": "users",
+      "input": "{object_guid}",
+      "rubigram": "typed",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "addGroup",
+      "category": "groups",
+      "input": "dyn: {title, member_guids}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getGroupInfo",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "editGroupInfo",
+      "category": "groups",
+      "input": "dyn: {group_guid, updated_parameters, title?, description?, slow_mode?, chat_history_for_new_members?, event_messages?, chat_reaction_setting?}",
+      "rubigram": "partial",
+      "priority": "P0",
+      "note": "rubigram cannot change title/description; 9 samples recorded",
+      "sample": true
+    },
+    {
+      "method": "addGroupMembers",
+      "category": "groups",
+      "input": "{group_guid, member_guids}",
+      "rubigram": "raw",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getGroupAllMembers",
+      "category": "groups",
+      "input": "{group_guid, search_text?, start_id?}",
+      "rubigram": "partial",
+      "priority": "P0",
+      "note": "rubigram has no pagination/search; sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getGroupAdminMembers",
+      "category": "groups",
+      "input": "{group_guid, start_id?, search_text?}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getBannedGroupMembers",
+      "category": "groups",
+      "input": "{group_guid, search_text?, start_id?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "banGroupMember",
+      "category": "groups",
+      "input": "{group_guid, member_guid, action:\"Set\"|\"Unset\"}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "setGroupAdmin",
+      "category": "groups",
+      "input": "dyn: {group_guid, member_guid, action:\"SetAdmin\"|\"UnsetAdmin\", access_list}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "3 samples recorded",
+      "sample": true
+    },
+    {
+      "method": "getGroupAdminAccessList",
+      "category": "groups",
+      "input": "{group_guid, member_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: access_list",
+      "sample": false
+    },
+    {
+      "method": "getGroupDefaultAccess",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "typed",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "setGroupDefaultAccess",
+      "category": "groups",
+      "input": "{group_guid, access_list}",
+      "rubigram": "raw",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getGroupLink",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "typed",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "setGroupLink",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Regenerates the join link",
+      "sample": false
+    },
+    {
+      "method": "getGroupOnlineCount",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getGroupMentionList",
+      "category": "groups",
+      "input": "dyn: {group_guid, search_mention?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "leaveGroup",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "joinGroup",
+      "category": "groups",
+      "input": "{hash_link}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "groupPreviewByJoinLink",
+      "category": "groups",
+      "input": "{hash_link}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: is_valid, group, ...",
+      "sample": false
+    },
+    {
+      "method": "removeGroup",
+      "category": "groups",
+      "input": "{group_guid}",
+      "rubigram": "raw",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "requestChangeObjectOwner",
+      "category": "groups",
+      "input": "dyn: {object_guid, new_owner_user_guid}",
+      "rubigram": "raw",
+      "priority": "P1",
+      "note": "Response: status; sample recorded",
+      "sample": true
+    },
+    {
+      "method": "cancelChangeObjectOwner",
+      "category": "groups",
+      "input": "{object_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "replyRequestObjectOwner",
+      "category": "groups",
+      "input": "dyn: {object_guid, action:\"Accept\"|\"Reject\"}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getPendingObjectOwner",
+      "category": "groups",
+      "input": "{object_guid}",
+      "rubigram": "typed",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "addChannel",
+      "category": "channels",
+      "input": "dyn: {title, description?, channel_type, member_guids, thumbnail_file_id?, main_file_id?}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "rubigram makes the avatar ids mandatory; sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getChannelInfo",
+      "category": "channels",
+      "input": "{channel_guid}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "editChannelInfo",
+      "category": "channels",
+      "input": "dyn: {channel_guid, updated_parameters, title?, description?, sign_messages?, chat_reaction_setting?, channel_type?}",
+      "rubigram": "partial",
+      "priority": "P0",
+      "note": "rubigram supports title/description only; sample recorded",
+      "sample": true
+    },
+    {
+      "method": "addChannelMembers",
+      "category": "channels",
+      "input": "{channel_guid, member_guids}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getChannelAllMembers",
+      "category": "channels",
+      "input": "{channel_guid, start_id?, search_text?}",
+      "rubigram": "partial",
+      "priority": "P0",
+      "note": "no pagination in rubigram",
+      "sample": false
+    },
+    {
+      "method": "getChannelAdminMembers",
+      "category": "channels",
+      "input": "{channel_guid, start_id?, search_text?}",
+      "rubigram": "partial",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "getBannedChannelMembers",
+      "category": "channels",
+      "input": "{channel_guid, search_text?, start_id?}",
+      "rubigram": "partial",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "banChannelMember",
+      "category": "channels",
+      "input": "{channel_guid, member_guid, action:\"Set\"|\"Unset\"}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "setChannelAdmin",
+      "category": "channels",
+      "input": "dyn: {channel_guid, member_guid, action:\"SetAdmin\"|\"UnsetAdmin\", access_list}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "samples recorded",
+      "sample": true
+    },
+    {
+      "method": "getChannelAdminAccessList",
+      "category": "channels",
+      "input": "{channel_guid, member_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getChannelLink",
+      "category": "channels",
+      "input": "{channel_guid}",
+      "rubigram": "wrong",
+      "priority": "P1",
+      "note": "rubigram types the result as Empty; the server returns join_link",
+      "sample": false
+    },
+    {
+      "method": "setChannelLink",
+      "category": "channels",
+      "input": "{channel_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: join_link",
+      "sample": false
+    },
+    {
+      "method": "updateChannelUsername",
+      "category": "channels",
+      "input": "{channel_guid, username}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "checkChannelUsername",
+      "category": "channels",
+      "input": "{username}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "joinChannelAction",
+      "category": "channels",
+      "input": "{channel_guid, action:\"Join\"|\"Leave\"|\"Remove\"}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "joinChannelByLink",
+      "category": "channels",
+      "input": "{hash_link}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "channelPreviewByJoinLink",
+      "category": "channels",
+      "input": "{hash_link}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "removeChannel",
+      "category": "channels",
+      "input": "{channel_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getJoinLinks",
+      "category": "joinlinks",
+      "input": "{object_guid, creator_guid?}",
+      "rubigram": "partial",
+      "priority": "P1",
+      "note": "rubigram omits creator_guid; sample recorded",
+      "sample": true
+    },
+    {
+      "method": "createJoinLink",
+      "category": "joinlinks",
+      "input": "dyn: {object_guid, title, request_needed, expire_time, usage_limit}",
+      "rubigram": "typed",
+      "priority": "P1",
+      "note": "sample recorded",
+      "sample": true
+    },
+    {
+      "method": "editJoinLink",
+      "category": "joinlinks",
+      "input": "dyn: {object_guid, join_link, title?, request_needed?, expire_time?, usage_limit?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "revokeJoinLink",
+      "category": "joinlinks",
+      "input": "{object_guid, join_link}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "deleteRevokedJoinLink",
+      "category": "joinlinks",
+      "input": "dyn: {object_guid, join_link}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getJoinRequests",
+      "category": "joinlinks",
+      "input": "dyn: {object_guid, start_id?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "actionOnJoinRequest",
+      "category": "joinlinks",
+      "input": "dyn: {object_guid, user_guid, action:\"Accept\"|\"Reject\"}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: chat_update, group, message_update",
+      "sample": false
+    },
+    {
+      "method": "getJoinLinkUserJoined",
+      "category": "joinlinks",
+      "input": "dyn: {object_guid, join_link, start_id?}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getFolders",
+      "category": "folders",
+      "input": "{last_state}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: folders, new_state",
+      "sample": false
+    },
+    {
+      "method": "getSuggestedFolders",
+      "category": "folders",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "Response: suggested_folders",
+      "sample": false
+    },
+    {
+      "method": "addFolder",
+      "category": "folders",
+      "input": "dyn: {name, include_chat_types?, exclude_chat_types?, include_object_guids?, exclude_object_guids?}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "chat types: Contacts, NonConatcts (sic), Groups, Channels, Bots, Services",
+      "sample": false
+    },
+    {
+      "method": "editFolder",
+      "category": "folders",
+      "input": "dyn: {folder_id, updated_parameters, ...same fields}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "deleteFolder",
+      "category": "folders",
+      "input": "{folder_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "setPinChatInFolder",
+      "category": "folders",
+      "input": "{folder_id, object_guid, action}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getMyStickerSets",
+      "category": "stickers",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "Response: sticker_sets",
+      "sample": false
+    },
+    {
+      "method": "getStickerSetByID",
+      "category": "stickers",
+      "input": "{sticker_set_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getStickersBySetIDs",
+      "category": "stickers",
+      "input": "{sticker_set_ids}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getStickersByEmoji",
+      "category": "stickers",
+      "input": "{emoji_character, suggest_by:\"All\"}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "searchStickers",
+      "category": "stickers",
+      "input": "{search_text, start_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getTrendStickerSets",
+      "category": "stickers",
+      "input": "{start_id}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getMyArchivedStickerSets",
+      "category": "stickers",
+      "input": "{search_text?, start_id?}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "actionOnStickerSet",
+      "category": "stickers",
+      "input": "{sticker_set_id, action:\"Add\"|\"Remove\"}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getStickerSetting",
+      "category": "stickers",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "Response: sticker_setting",
+      "sample": false
+    },
+    {
+      "method": "getMyGifSet",
+      "category": "stickers",
+      "input": "{}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Response: gifs",
+      "sample": false
+    },
+    {
+      "method": "addToMyGifSet",
+      "category": "stickers",
+      "input": "{message_id, object_guid}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getBotInfo",
+      "category": "bots",
+      "input": "{bot_guid}",
+      "rubigram": "missing",
+      "priority": "P0",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "stopBot",
+      "category": "bots",
+      "input": "{bot_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getSelection",
+      "category": "bots",
+      "input": "{bot_guid, selection_id, start_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "searchSelection",
+      "category": "bots",
+      "input": "{bot_guid, selection_id, search_text, limit}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getServiceInfo",
+      "category": "services",
+      "input": "{service_guid}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getLandingPage",
+      "category": "services",
+      "input": "dyn (services.iranlms.ir, api_version 0, plain JSON)",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getWebAppFunction",
+      "category": "services",
+      "input": "{app_id} (webapp1.iranlms.ir, api_version 1, plain JSON)",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getMapView",
+      "category": "services",
+      "input": "{location}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getProfilePosts",
+      "category": "rubino",
+      "input": "{target_profile_id, max_id, min_id, equal:true, limit:1, sort:\"FromMax\"} (rubino DC, api_version 0)",
+      "rubigram": "typed",
+      "priority": "P1",
+      "note": "Owner's rescued work",
+      "sample": false
+    },
+    {
+      "method": "getProfilesStoryList",
+      "category": "rubino",
+      "input": "{profile_story_ids:[{story_ids:[...], profile_id}]} (rubino DC, api_version 0)",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "sendRubinoPost",
+      "category": "rubino",
+      "input": "dyn: {object_guid, rnd, ...post fields}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getWalletTransferMessage",
+      "category": "wallet",
+      "input": "dyn: {transfer_id, ...}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "sendWalletTransferMessage",
+      "category": "wallet",
+      "input": "dyn: {object_guid, rnd, ...}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getPaymentInfo",
+      "category": "wallet",
+      "input": "{payment_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "sendLive",
+      "category": "live",
+      "input": "dyn: {object_guid, rnd, ...}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "stopLive",
+      "category": "live",
+      "input": "{live_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getLiveStatus",
+      "category": "live",
+      "input": "{live_id, access_token}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "Messages of type Live carry live_data.access_token",
+      "sample": false
+    },
+    {
+      "method": "getLivePlayUrl",
+      "category": "live",
+      "input": "{live_id, access_token}",
+      "rubigram": "missing",
+      "priority": "P1",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getLiveViewers",
+      "category": "live",
+      "input": "{live_id, start_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getLiveComments",
+      "category": "live",
+      "input": "dyn: {live_id, ...}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "addLiveComment",
+      "category": "live",
+      "input": "dyn: {live_id, text, rnd}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "setLiveSetting",
+      "category": "live",
+      "input": "{live_id, allow_comment, updated_parameters}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "createGroupVoiceChat",
+      "category": "voicechat",
+      "input": "{chat_guid}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "discardGroupVoiceChat",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getGroupVoiceChat",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getGroupVoiceChatParticipants",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id, start_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getGroupVoiceChatParticipantsByObjectGuids",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id, object_guids}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getGroupVoiceChatUpdates",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id, state}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "joinGroupVoiceChat",
+      "category": "voicechat",
+      "input": "dyn: {chat_guid, voice_chat_id, sdp_offer_data, self_object_guid}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "leaveGroupVoiceChat",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "sendGroupVoiceChatActivity",
+      "category": "voicechat",
+      "input": "dyn: {chat_guid, voice_chat_id, activity:\"Speaking\"} (try_count 0)",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "setGroupVoiceChatSetting",
+      "category": "voicechat",
+      "input": "{chat_guid, voice_chat_id, join_muted?, updated_parameters}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "setGroupVoiceChatState",
+      "category": "voicechat",
+      "input": "dyn: {chat_guid, voice_chat_id, participant_object_guid, action}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "getDisplayAsInGroupVoiceChat",
+      "category": "voicechat",
+      "input": "{chat_guid, start_id}",
+      "rubigram": "missing",
+      "priority": "P2",
+      "note": "",
+      "sample": false
+    },
+    {
+      "method": "searchGlobalObjects",
+      "category": "search",
+      "input": "{search_text, filter_types?}",
+      "rubigram": "typed",
+      "priority": "P0",
+      "note": "sample recorded",
+      "sample": true
+    }
+  ]
+}

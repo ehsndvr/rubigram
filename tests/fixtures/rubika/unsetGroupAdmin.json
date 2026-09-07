@@ -1,0 +1,17 @@
+[
+  {
+    "method": "setGroupAdmin",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "member_guid": "u0EXAMPLE00000000000000000000001",
+      "action": "UnsetAdmin"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  }
+]

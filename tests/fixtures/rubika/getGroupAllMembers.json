@@ -1,0 +1,48 @@
+[
+  {
+    "method": "getGroupAllMembers",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "in_chat_members": [
+        {
+          "member_type": "Bot",
+          "member_guid": "b0EXAMPLE00000000000000000000005",
+          "title": "Sample title",
+          "is_verified": false,
+          "is_deleted": false,
+          "join_type": "Member",
+          "username": "sample_user"
+        },
+        {
+          "member_type": "User",
+          "member_guid": "u0EXAMPLE00000000000000000000002",
+          "first_name": "Sample",
+          "is_verified": false,
+          "is_deleted": false,
+          "last_online": 1774237744,
+          "join_type": "Creator",
+          "username": "sample_user",
+          "online_time": {
+            "type": "Exact",
+            "exact_time": 1774237744
+          }
+        }
+      ],
+      "has_continue": false,
+      "timestamp": "1774237744"
+    }
+  }
+]

@@ -1,0 +1,36 @@
+[
+  {
+    "method": "getAvailableReactions",
+    "input": {},
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "reactions": [
+        {
+          "reaction_id": "1",
+          "emoji_char": "❤",
+          "name": "Red Heart"
+        },
+        {
+          "reaction_id": "2",
+          "emoji_char": "👍",
+          "name": "Thumbs Up"
+        },
+        {
+          "reaction_id": "74",
+          "emoji_char": "🇮🇷",
+          "name": "Iran"
+        }
+      ]
+    }
+  }
+]
