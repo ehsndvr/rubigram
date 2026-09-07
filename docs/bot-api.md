@@ -1,103 +1,86 @@
 # Bot API
 
-Rubika Bot API is available through the same `Client` class by passing `token=...`.
-
-## Main Entry Point
-
-```python
-from rubigram import Client
-from rubigram.bot.types import Button, Keypad, KeypadRow
-```
-
-## Example
+Bots use the same `Client` class: pass the token and every shared method
+switches to `https://botapi.rubika.ir`.
 
 ```python
-import asyncio
+import os
+from rubigram import Client, filters
+from rubigram.types.bot import Button, Keypad, KeypadRow
 
-from rubigram import Client
-from rubigram.bot.types import Button, Keypad, KeypadRow
+bot = Client("my_bot", token=os.environ["RUBIGRAM_BOT_TOKEN"])
 
-app = Client("my_bot", token="your-bot-token")
+@bot.on_message(filters.command("start"))
+async def start(client, message):
+    keypad = Keypad(rows=[KeypadRow(buttons=[Button(id="hello", type="Simple", button_text="Say hi")])])
+    await message.reply("Welcome!", inline_keypad=keypad)
 
+@bot.on_callback_query(filters.button_id("hello"))
+async def pressed(client, message):
+    await client.send_message(message.chat_id, "hi!")
 
-@app.on_message()
-async def handle_message(client, message):
-    await message.reply("received")
-
-
-async def main():
-    await app.send_message(
-        "chat-id",
-        text="Welcome",
-        inline_keypad=Keypad(
-            rows=[
-                KeypadRow(
-                    buttons=[
-                        Button(id="100", type="Simple", button_text="Open"),
-                    ]
-                )
-            ]
-        ),
-    )
-    await app.start_polling()
-    await app.idle()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+bot.run()          # long polling with getUpdates; the offset is stored in the session
 ```
 
-## Implemented Methods
+## Shared methods that switch to the Bot API
 
-- `get_me()`
-- `send_message()`
-- `send_poll()`
-- `send_location()`
-- `send_contact()`
-- `get_chat()`
-- `get_updates()`
-- `forward_message()`
-- `edit_message_text()`
-- `edit_message_keypad()`
-- `edit_inline_keypad()`
-- `delete_message()`
-- `set_commands()`
-- `update_bot_endpoints()`
-- `edit_chat_keypad()`
-- `get_file()`
-- `request_send_file()`
-- `upload_file()`
-- `send_file()`
-- `send_media()`
-- `send_photo()`
-- `send_document()`
-- `send_voice()`
-- `send_video()`
-- `send_music()`
-- `ban_chat_member()`
-- `unban_chat_member()`
+| Method | Bot API call |
+|---|---|
+| `send_message(chat_id, text, chat_keypad=, inline_keypad=, chat_keypad_type=, disable_notification=, reply_to_message_id=)` | `sendMessage` |
+| `send_photo` / `send_video` / `send_voice` / `send_music` / `send_gif` / `send_document` / `send_media` | `requestSendFile` → upload → `sendFile` |
+| `send_location`, `create_poll` / `send_poll` | `sendLocation`, `sendPoll` |
+| `edit_message` / `edit_message_text`, `delete_message`, `forward_message` | `editMessageText`, `deleteMessage`, `forwardMessage` |
+| `get_me`, `get_chat` | `getMe`, `getChat` |
+| `get_updates` | `getUpdates` |
+| `download_file(file_id or File)`, `upload_file(upload_url=, path=)` | `getFile` + download, multipart upload |
 
-## Event Sources
+Bot-only methods: `send_contact`, `edit_message_keypad`, `edit_chat_keypad`,
+`set_commands`, `update_bot_endpoints`, `get_file`, `download_bot_file`,
+`upload_bot_file`, `send_file`, `ban_chat_member`, `unban_chat_member`,
+`get_bot_updates`, `parse_webhook_update`, `dispatch_webhook_update`.
+User-only methods raise `RubigramError` on a bot session, and `invoke()` raises
+`TransportError` because Rubika RPCs need a phone session.
 
-Rubigram supports both documented bot update flows:
+`chat_id` values come from updates (`message.chat_id`), never from user guids;
+sending to a `u0…` guid answers `INVALID_INPUT` and rubigram adds a hint to the
+error.
 
-- long polling through `get_updates()`
-- webhook payload parsing through `parse_webhook_update()` and `dispatch_webhook_update()`
+## Updates
 
-Webhook payloads are parsed into `WebhookUpdate`, `Update`, and `InlineMessage` typed objects.
+`bot.run()` / `await bot.idle()` poll `getUpdates` and dispatch:
 
-## Filters
+| Update | Handler |
+|---|---|
+| `NewMessage` | `on_message` (and `on_callback_query` when `aux_data.button_id` is set) |
+| `UpdatedMessage` | `on_edited_message` |
+| `RemovedMessage` | `on_deleted_message` (receives the `Update`, use `removed_message_id`) |
+| inline messages (webhook only) | `on_inline_message` and `on_callback_query` |
+| everything | `on_raw_update` |
 
-Bot handlers use the same filter system:
+Webhooks: register the URL once with `update_bot_endpoints(url, "ReceiveUpdate")`
+(and `"ReceiveInlineMessage"`), then feed each request body to
+`dispatch_webhook_update(payload)` from your web framework. `parse_webhook_update`
+only parses.
 
-- `filters.text`
-- `filters.private`
-- `filters.command("start")`
-
-Example:
+## Files
 
 ```python
-@app.on_message(filters.command(["start", "help"]))
-async def handle_command(client, message):
-    print(message.command)
+sent = await bot.send_photo(chat_id, "pic.jpg", text="caption")
+path = await bot.download_file(message.file)          # getFile → download_url
+data = await bot.download_file(message.file.file_id, in_memory=True)
 ```
+
+## Types and enums
+
+Bot payloads are typed in `rubigram.types.bot` (`Message`, `Update`,
+`BotUpdates`, `InlineMessage`, `Keypad`, `KeypadRow`, `Button`,
+`ButtonSelection`, `ButtonCalendar`, `ButtonNumberPicker`,
+`ButtonStringPicker`, `ButtonTextbox`, `ButtonLocation`, `AuxData`, `File`,
+`Chat`, `Bot`, `BotCommand`, `Poll`, `SentMessage`, `WebhookUpdate`) with the
+enums in `rubigram.enums` (`ButtonType`, `ChatKeypadType`, `UpdateType`,
+`FileType`, `MessageSender`, `UpdateEndpointType`, …). Every model accepts
+keyword arguments and serializes with `to_dict()`.
+
+Errors: a `{"status": "INVALID_INPUT"}` answer raises the same
+`rubigram.errors.InvalidInput` as the user API; other statuses raise
+`BotApiError` with the raw payload.
