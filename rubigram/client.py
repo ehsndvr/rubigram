@@ -276,7 +276,6 @@ class Client(Methods):
                 AuthUnwrapper(private_key_pem),
             )
             self._transport = RpcTransport(
-                self._dc_discovery,
                 self._pool,
                 timeout=self.timeout,
             )
