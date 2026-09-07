@@ -176,9 +176,27 @@ class Message(Object):
             raise RuntimeError("This message does not have chat_id")
         return self._client
 
-    async def reply(self, text: str, *, inline_keypad: Optional[Keypad] = None, chat_keypad: Optional[Keypad] = None, chat_keypad_type: Any = None, disable_notification: bool = False, **kwargs: Any) -> Any:
+    async def reply(
+        self,
+        text: str,
+        *,
+        inline_keypad: Optional[Keypad] = None,
+        chat_keypad: Optional[Keypad] = None,
+        chat_keypad_type: Any = None,
+        disable_notification: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         client = self._require_client()
-        return await client.send_message(self.chat_id, text, inline_keypad=inline_keypad, chat_keypad=chat_keypad, chat_keypad_type=chat_keypad_type, disable_notification=disable_notification, reply_to_message_id=self.message_id, **kwargs)
+        return await client.send_message(
+            self.chat_id,
+            text,
+            inline_keypad=inline_keypad,
+            chat_keypad=chat_keypad,
+            chat_keypad_type=chat_keypad_type,
+            disable_notification=disable_notification,
+            reply_to_message_id=self.message_id,
+            **kwargs,
+        )
 
     async def delete(self) -> Any:
         client = self._require_client()
@@ -291,21 +309,21 @@ class WebhookUpdate(Object):
 
 
 __all__ = [
-    "File",
-    "Chat",
-    "ForwardedFrom",
-    "MessageTextUpdate",
-    "BotCommand",
     "Bot",
-    "Sticker",
-    "ContactMessage",
-    "PollStatus",
-    "Poll",
-    "Message",
-    "InlineMessage",
-    "CallbackQuery",
-    "SentMessage",
-    "Update",
+    "BotCommand",
     "BotUpdates",
+    "CallbackQuery",
+    "Chat",
+    "ContactMessage",
+    "File",
+    "ForwardedFrom",
+    "InlineMessage",
+    "Message",
+    "MessageTextUpdate",
+    "Poll",
+    "PollStatus",
+    "SentMessage",
+    "Sticker",
+    "Update",
     "WebhookUpdate",
 ]

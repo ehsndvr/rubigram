@@ -98,4 +98,4 @@ class UrlPool:
 # Backward-compatible name used by the previous transport module.
 ApiUrlPool = UrlPool
 
-__all__ = ["UrlPool", "ApiUrlPool"]
+__all__ = ["ApiUrlPool", "UrlPool"]

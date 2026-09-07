@@ -1,21 +1,26 @@
 """``Client(token=...)``: the Bot API through the same client class."""
+# pyright: reportOptionalMemberAccess=false
+# (tests assert on parsed payloads; a missing field is a test failure)
 
 from __future__ import annotations
+
+from pathlib import Path
+from typing import cast
 
 import pytest
 
 from rubigram import Client, errors, types
-from rubigram.enums import ChatKeypadType
+from rubigram.enums import ButtonType, ChatKeypadType
 from rubigram.types.bot import Button, Keypad, KeypadRow
 
-from .fake_rubika import install, run
+from .fake_rubika import FakeBotTransport, install, run
 
 
 async def started(monkeypatch, **kwargs):
     install(monkeypatch)
     client = Client("bot", token="1:fake", in_memory=True, **kwargs)
     await client.start()
-    return client, client._bot
+    return client, cast(FakeBotTransport, client._bot)
 
 
 def test_bot_start_persists_token_and_refuses_user_rpcs(monkeypatch):
@@ -37,13 +42,28 @@ def test_send_message_serializes_keypads_and_parses_sent_message(monkeypatch):
     async def scenario():
         client, bot = await started(monkeypatch)
         bot.responses["sendMessage"] = {"message_id": "77"}
-        keypad = Keypad(client=None, rows=[KeypadRow(client=None, buttons=[Button(client=None, id="btn-1", type="Simple", button_text="Go")])], resize_keyboard=True)
-        sent = await client.send_message("b0chat", "hello", inline_keypad=keypad, chat_keypad=keypad, chat_keypad_type=ChatKeypadType.NEW, disable_notification=True, reply_to_message_id="5")
+        keypad = Keypad(
+            client=None,
+            rows=[KeypadRow(client=None, buttons=[Button(client=None, id="btn-1", type=ButtonType.SIMPLE, button_text="Go")])],
+            resize_keyboard=True,
+        )
+        sent = await client.send_message(
+            "b0chat",
+            "hello",
+            inline_keypad=keypad,
+            chat_keypad=keypad,
+            chat_keypad_type=ChatKeypadType.NEW,
+            disable_notification=True,
+            reply_to_message_id="5",
+        )
         assert isinstance(sent, types.bot.SentMessage) and sent.message_id == "77"
         payload = bot.payload("sendMessage")
         assert payload["chat_id"] == "b0chat" and payload["text"] == "hello" and payload["disable_notification"] is True
         assert payload["chat_keypad_type"] == "New" and payload["reply_to_message_id"] == "5"
-        assert payload["inline_keypad"] == {"rows": [{"buttons": [{"id": "btn-1", "type": "Simple", "button_text": "Go"}]}], "resize_keyboard": True}
+        assert payload["inline_keypad"] == {
+            "rows": [{"buttons": [{"id": "btn-1", "type": "Simple", "button_text": "Go"}]}],
+            "resize_keyboard": True,
+        }
         with pytest.raises(ValueError):
             await client.send_message("b0chat")
         await client.stop()
@@ -54,13 +74,28 @@ def test_send_message_serializes_keypads_and_parses_sent_message(monkeypatch):
 def test_bot_helpers_map_to_bot_api_methods(monkeypatch):
     async def scenario():
         client, bot = await started(monkeypatch)
-        bot.responses.update({"getMe": {"bot": {"bot_id": "b1", "username": "sample_bot"}}, "getChat": {"chat": {"chat_id": "b0chat", "chat_type": "User"}}, "forwardMessage": {"message_id": "8"}, "editMessageText": {"message_id": "1"}, "sendPoll": {"message_id": "9"}, "sendLocation": {"message_id": "10"}, "sendContact": {"message_id": "11"}})
+        bot.responses.update(
+            {
+                "getMe": {"bot": {"bot_id": "b1", "username": "sample_bot"}},
+                "getChat": {"chat": {"chat_id": "b0chat", "chat_type": "User"}},
+                "forwardMessage": {"message_id": "8"},
+                "editMessageText": {"message_id": "1"},
+                "sendPoll": {"message_id": "9"},
+                "sendLocation": {"message_id": "10"},
+                "sendContact": {"message_id": "11"},
+            }
+        )
         me = await client.get_me()
         assert isinstance(me, types.bot.Bot) and me.username == "sample_bot"
         chat = await client.get_chat("b0chat")
         assert isinstance(chat, types.bot.Chat) and chat.chat_id == "b0chat"
         assert (await client.forward_message("b0a", "1", "b0b")).message_id == "8"
-        assert bot.payload("forwardMessage") == {"from_chat_id": "b0a", "message_id": "1", "to_chat_id": "b0b", "disable_notification": False}
+        assert bot.payload("forwardMessage") == {
+            "from_chat_id": "b0a",
+            "message_id": "1",
+            "to_chat_id": "b0b",
+            "disable_notification": False,
+        }
         await client.edit_message_text("b0chat", "1", "edited")
         await client.edit_message("b0chat", "1", "edited again")
         assert [p["text"] for m, p in bot.calls if m == "editMessageText"] == ["edited", "edited again"]
@@ -87,7 +122,10 @@ def test_bot_updates_persist_offset_and_files_round_trip(monkeypatch, tmp_path):
     async def scenario():
         client, bot = await started(monkeypatch)
         bot.responses["getUpdates"] = [
-            {"updates": [{"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "1", "text": "hi"}}], "next_offset_id": "off-1"},
+            {
+                "updates": [{"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "1", "text": "hi"}}],
+                "next_offset_id": "off-1",
+            },
             {"updates": [], "next_offset_id": "off-2"},
         ]
         updates = await client.get_updates()
@@ -107,8 +145,11 @@ def test_bot_updates_persist_offset_and_files_round_trip(monkeypatch, tmp_path):
 
         bot.responses["getFile"] = {"file": {"file_id": "file-42", "file_name": "pic.jpg", "download_url": "https://dl.example/pic.jpg"}}
         target = await client.download_file("file-42", tmp_path)
-        assert target == tmp_path / "pic.jpg" and target.read_bytes() == b"bot-bytes"
-        assert await client.download_bot_file(types.bot.File(client=None, file_id="f", download_url="https://dl.example/f"), in_memory=True) == b"bot-bytes"
+        assert isinstance(target, Path) and target == tmp_path / "pic.jpg" and target.read_bytes() == b"bot-bytes"
+        assert (
+            await client.download_bot_file(types.bot.File(client=None, file_id="f", download_url="https://dl.example/f"), in_memory=True)
+            == b"bot-bytes"
+        )
         await client.stop()
 
     run(scenario())
@@ -127,10 +168,14 @@ def test_webhook_payloads_are_parsed_and_dispatched(monkeypatch):
         async def inline(app, msg):
             seen.append(("inline", msg.message_id))
 
-        parsed = await client.parse_webhook_update({"update": {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "1", "text": "x"}}})
+        parsed = await client.parse_webhook_update(
+            {"update": {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "1", "text": "x"}}}
+        )
         assert parsed.update.new_message.chat_id == "b0chat" and seen == []
         await client.dispatch_webhook_update({"inline_message": {"message_id": "2", "chat_id": "b0chat", "aux_data": {"button_id": "b"}}})
-        await client.dispatch_webhook_update({"update": {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "3", "text": "y"}}})
+        await client.dispatch_webhook_update(
+            {"update": {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "3", "text": "y"}}}
+        )
         assert seen == [("inline", "2"), ("message", "3")]
         await client.stop()
 

@@ -173,7 +173,15 @@ class Message(Object):
         client = self._require_client()
         if not self.message_id:
             raise RuntimeError("This message does not have message_id required for reply()")
-        return await client.send_message(object_guid=self.object_guid, rnd=str(time.time_ns()), text=text, parse_mode=parse_mode, entities=entities, reply_to_message_id=self.message_id, **kwargs)
+        return await client.send_message(
+            object_guid=self.object_guid,
+            rnd=str(time.time_ns()),
+            text=text,
+            parse_mode=parse_mode,
+            entities=entities,
+            reply_to_message_id=self.message_id,
+            **kwargs,
+        )
 
     async def edit(self, text: str, parse_mode: Any = None, entities: Optional[list[Any]] = None) -> Any:
         client = self._require_client()
@@ -207,11 +215,21 @@ class Message(Object):
         client = self._require_client()
         return await client.seen_chats({self.object_guid: self.message_id})
 
-    async def download(self, path: Any = None, *, in_memory: bool = False, file_name: Optional[str] = None, progress: Any = None, progress_args: tuple[Any, ...] = ()) -> Any:
+    async def download(
+        self,
+        path: Any = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Any:
         """Download the message media (file, sticker) through the bound client."""
         if self._client is None:
             raise RuntimeError("This message is not bound to a Client instance")
-        return await self._client.download_file(self, path=path, in_memory=in_memory, file_name=file_name, progress=progress, progress_args=progress_args)
+        return await self._client.download_file(
+            self, path=path, in_memory=in_memory, file_name=file_name, progress=progress, progress_args=progress_args
+        )
 
 
 @model
@@ -256,18 +274,18 @@ class MessageUpdate(Object):
 SocketMessageUpdate = MessageUpdate
 
 __all__ = [
-    "ForwardedFrom",
-    "RubinoPostData",
-    "LiveStatus",
-    "LiveData",
-    "Location",
     "ContactMessage",
-    "MetadataPart",
-    "MessageMetadata",
     "EventData",
-    "ReactionCount",
+    "ForwardedFrom",
+    "LiveData",
+    "LiveStatus",
+    "Location",
     "Message",
+    "MessageMetadata",
     "MessageUpdate",
-    "SocketMessageUpdate",
+    "MetadataPart",
     "RawObject",
+    "ReactionCount",
+    "RubinoPostData",
+    "SocketMessageUpdate",
 ]

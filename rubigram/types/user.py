@@ -95,7 +95,7 @@ class UserInfo(Object):
     """Result of ``getUserInfo``."""
 
     user: Optional[User] = None
-    chat: Optional["Chat"] = None
+    chat: Optional[Chat] = None
     timestamp: Optional[str] = None
     is_in_contact: Optional[bool] = None
     can_receive_call: Optional[bool] = None
@@ -158,7 +158,7 @@ class ObjectByUsername(Object):
     exist: Optional[bool] = None
     type: Optional[str] = None
     user: Optional[User] = None
-    chat: Optional["Chat"] = None
+    chat: Optional[Chat] = None
     channel: Optional[Any] = None
     group: Optional[Any] = None
     bot: Optional[Any] = None
@@ -292,28 +292,28 @@ class TimeResult(Object):
 
 
 __all__ = [
-    "OnlineTime",
-    "PeerObject",
-    "User",
-    "UserAdditionalInfo",
-    "UserInfo",
+    "AbsObjects",
+    "Authorization",
+    "BlockedUsers",
+    "CommonGroups",
+    "Contacts",
     "ContactsLastOnline",
     "ContactsUpdates",
-    "Contacts",
-    "BlockedUsers",
-    "ObjectByUsername",
-    "AbsObjects",
-    "CommonGroups",
-    "UsernameCheck",
-    "UpdatedProfile",
-    "SentCode",
-    "Authorization",
     "InlineOpenUrlData",
+    "ObjectByUsername",
+    "OnlineTime",
+    "PeerObject",
     "ProfileLink",
     "ProfileLinkItem",
     "ProfileLinkItems",
+    "RawObject",
     "SearchGlobalObject",
     "SearchGlobalObjectsResult",
+    "SentCode",
     "TimeResult",
-    "RawObject",
+    "UpdatedProfile",
+    "User",
+    "UserAdditionalInfo",
+    "UserInfo",
+    "UsernameCheck",
 ]

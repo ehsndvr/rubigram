@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import re
 from typing import Any, Callable, Iterable, Optional, Pattern, Sequence
@@ -36,19 +37,19 @@ class Filter:
             raise TypeError(f"filter {self.name} is asynchronous; await it instead")
         return bool(result)
 
-    def __and__(self, other: "Filter") -> "Filter":
+    def __and__(self, other: Filter) -> Filter:
         async def func(client: Any, update: Any) -> bool:
             return await self(client, update) and await other(client, update)
 
         return Filter(func, f"({self.name}&{other.name})")
 
-    def __or__(self, other: "Filter") -> "Filter":
+    def __or__(self, other: Filter) -> Filter:
         async def func(client: Any, update: Any) -> bool:
             return await self(client, update) or await other(client, update)
 
         return Filter(func, f"({self.name}|{other.name})")
 
-    def __invert__(self) -> "Filter":
+    def __invert__(self) -> Filter:
         async def func(client: Any, update: Any) -> bool:
             return not await self(client, update)
 
@@ -97,7 +98,12 @@ def _metadata_types(update: Any) -> set[str]:
         parts = metadata
     else:
         parts = getattr(metadata, "meta_data_parts", None) or []
-    return {getattr(part, "type", None) or (part.get("type") if isinstance(part, dict) else None) for part in parts} - {None}
+    found: set[str] = set()
+    for part in parts:
+        part_type = getattr(part, "type", None) or (part.get("type") if isinstance(part, dict) else None)
+        if part_type:
+            found.add(str(getattr(part_type, "value", part_type)))
+    return found
 
 
 def _text(update: Any) -> str:
@@ -129,7 +135,11 @@ event = create(lambda client, update: _message_type(update) == "Event", "event")
 location = create(lambda client, update: _attr(update, "location") is not None or _message_type(update) == "Location", "location")
 contact = create(lambda client, update: _attr(update, "contact_message") is not None, "contact")
 media = create(
-    lambda client, update: _attr(update, "file_inline") is not None or _attr(update, "file") is not None or _message_type(update) in {"Sticker", "RubinoPost", "Live"},
+    lambda client, update: (
+        _attr(update, "file_inline") is not None
+        or _attr(update, "file") is not None
+        or _message_type(update) in {"Sticker", "RubinoPost", "Live"}
+    ),
     "media",
 )
 gif = create(lambda client, update: _file_type(update) == "Gif", "gif")
@@ -137,7 +147,9 @@ video = create(lambda client, update: _file_type(update) == "Video", "video")
 photo = create(lambda client, update: _file_type(update) == "Image", "photo")
 voice = create(lambda client, update: _file_type(update) == "Voice", "voice")
 music = create(lambda client, update: _file_type(update) == "Music", "music")
-document = create(lambda client, update: _file_type(update) == "File" or (_attr(update, "file") is not None and _file_type(update) is None), "document")
+document = create(
+    lambda client, update: _file_type(update) == "File" or (_attr(update, "file") is not None and _file_type(update) is None), "document"
+)
 
 metadata = create(lambda client, update: bool(_metadata_types(update)), "metadata")
 bold = create(lambda client, update: "Bold" in _metadata_types(update), "bold")
@@ -163,7 +175,9 @@ voice_chat_started = create(lambda client, update: _event_type(update) == "Voice
 voice_chat_finished = create(lambda client, update: _event_type(update) == "VoiceChatFinished", "voice_chat_finished")
 
 # Bot API specifics
-button = create(lambda client, update: _attr(update, "aux_data") is not None and getattr(update.aux_data, "button_id", None) is not None, "button")
+button = create(
+    lambda client, update: _attr(update, "aux_data") is not None and getattr(update.aux_data, "button_id", None) is not None, "button"
+)
 from_bot = create(lambda client, update: str(_attr(update, "sender_type") or "") == "Bot", "from_bot")
 
 
@@ -172,7 +186,7 @@ from_bot = create(lambda client, update: str(_attr(update, "sender_type") or "")
 # ---------------------------------------------------------------------------
 
 
-def regex(pattern: "str | Pattern[str]", flags: int = 0) -> Filter:
+def regex(pattern: str | Pattern[str], flags: int = 0) -> Filter:
     """Match ``message.text`` against a regular expression; stores the match as ``message.matches``."""
     compiled = re.compile(pattern, flags) if isinstance(pattern, str) else pattern
 
@@ -180,16 +194,14 @@ def regex(pattern: "str | Pattern[str]", flags: int = 0) -> Filter:
         match = compiled.search(_text(update))
         if match is None:
             return False
-        try:
-            setattr(update, "matches", [match])
-        except AttributeError:  # pragma: no cover - frozen objects
-            pass
+        with contextlib.suppress(AttributeError):  # frozen objects
+            update.matches = [match]
         return True
 
     return create(func, f"regex:{compiled.pattern}")
 
 
-def command(commands: "str | Sequence[str]", prefixes: "str | Sequence[str]" = "/", *, case_sensitive: bool = False) -> Filter:
+def command(commands: str | Sequence[str], prefixes: str | Sequence[str] = "/", *, case_sensitive: bool = False) -> Filter:
     """Match ``/command args``; the parsed parts are stored on ``message.command``."""
     if isinstance(commands, str):
         wanted = {commands}
@@ -197,7 +209,7 @@ def command(commands: "str | Sequence[str]", prefixes: "str | Sequence[str]" = "
         wanted = set(commands)
     if not case_sensitive:
         wanted = {item.lower() for item in wanted}
-    allowed_prefixes = tuple(prefixes) if isinstance(prefixes, str) else tuple(prefixes)
+    allowed_prefixes = tuple(prefixes)
 
     def func(client: Any, update: Any) -> bool:
         body = _text(update).strip()
@@ -210,7 +222,7 @@ def command(commands: "str | Sequence[str]", prefixes: "str | Sequence[str]" = "
         name = head if case_sensitive else head.lower()
         if name not in wanted:
             return False
-        setattr(update, "command", [name, *parts[1:]])
+        update.command = [name, *parts[1:]]
         return True
 
     return create(func, "command:" + ",".join(sorted(wanted)))
@@ -245,60 +257,60 @@ channel_link = regex(r"rubika\.ir/joinc/\w{32}")
 
 __all__ = [
     "Filter",
-    "create",
     "all",
-    "me",
-    "outgoing",
-    "incoming",
-    "private",
-    "bot",
-    "group",
-    "channel",
-    "service",
-    "text",
-    "poll",
-    "quiz",
-    "rubino",
-    "sticker",
-    "live",
-    "caption",
-    "event",
-    "location",
-    "contact",
-    "media",
-    "gif",
-    "video",
-    "photo",
-    "voice",
-    "music",
-    "document",
-    "metadata",
     "bold",
-    "mono",
-    "italic",
-    "mention",
-    "new",
-    "edited",
+    "bot",
+    "button",
+    "button_id",
+    "caption",
+    "channel",
+    "channel_link",
+    "chat",
+    "command",
+    "contact",
+    "create",
     "deleted",
-    "replied",
-    "reply",
+    "document",
+    "edited",
+    "event",
     "forwarded",
     "forwarded_no_link",
-    "scheduled",
+    "from_bot",
+    "gif",
+    "group",
+    "group_link",
+    "incoming",
+    "italic",
+    "live",
+    "location",
+    "me",
+    "media",
     "member_added",
     "member_joined",
     "member_left",
     "member_removed",
+    "mention",
     "message_pinned",
-    "voice_chat_started",
-    "voice_chat_finished",
-    "button",
-    "from_bot",
+    "metadata",
+    "mono",
+    "music",
+    "new",
+    "outgoing",
+    "photo",
+    "poll",
+    "private",
+    "quiz",
     "regex",
-    "command",
-    "chat",
+    "replied",
+    "reply",
+    "rubino",
+    "scheduled",
+    "service",
+    "sticker",
+    "text",
     "user",
-    "button_id",
-    "group_link",
-    "channel_link",
+    "video",
+    "voice",
+    "voice_chat_finished",
+    "voice_chat_started",
 ]

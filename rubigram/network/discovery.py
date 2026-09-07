@@ -131,7 +131,7 @@ class DcDiscovery:
     # -- static helpers (also used by DcRepository) ------------------------
 
     @classmethod
-    def urls_for(cls, payload: Dict[str, Any], dc_type: "DcType | str") -> List[str]:
+    def urls_for(cls, payload: Dict[str, Any], dc_type: DcType | str) -> List[str]:
         normalized_type = cls._normalize_dc_type(dc_type)
         data = payload.get("data", payload) if isinstance(payload, dict) else {}
         urls: List[str] = []
@@ -143,7 +143,7 @@ class DcDiscovery:
         return urls
 
     @classmethod
-    def suggested_urls_for(cls, payload: Dict[str, Any], dc_type: "DcType | str") -> List[str]:
+    def suggested_urls_for(cls, payload: Dict[str, Any], dc_type: DcType | str) -> List[str]:
         normalized_type = cls._normalize_dc_type(dc_type)
         data = payload.get("data", payload) if isinstance(payload, dict) else {}
         suggested = data.get("suggested_urls") or {}
@@ -155,7 +155,7 @@ class DcDiscovery:
         return urls
 
     @staticmethod
-    def _normalize_dc_type(dc_type: "DcType | str") -> DcType:
+    def _normalize_dc_type(dc_type: DcType | str) -> DcType:
         if isinstance(dc_type, DcType):
             return dc_type
         return DcType(str(dc_type).strip().lower())
@@ -206,8 +206,10 @@ class DcDiscovery:
     def __del__(self):
         client = self._client
         if client is not None:
-            with contextlib.suppress(Exception):
-                client._transport.close()
+            close = getattr(getattr(client, "_transport", None), "close", None)
+            if callable(close):
+                with contextlib.suppress(Exception):
+                    close()
 
 
 class DcRepository:
@@ -272,7 +274,7 @@ class DcRepository:
         DcType.WALLET: "default_wallet_urls",
     }
 
-    def urls(self, dc_type: "DcType | str") -> List[str]:
+    def urls(self, dc_type: DcType | str) -> List[str]:
         normalized = DcDiscovery._normalize_dc_type(dc_type)
         if normalized is DcType.DCS:
             return [DC_DISCOVERY_URL]
@@ -281,7 +283,7 @@ class DcRepository:
         DcDiscovery._collect_urls(raw, urls)
         return urls
 
-    def pool(self, dc_type: "DcType | str") -> UrlPool:
+    def pool(self, dc_type: DcType | str) -> UrlPool:
         normalized = DcDiscovery._normalize_dc_type(dc_type)
         pool = self._pools.get(normalized)
         if pool is None:
@@ -311,7 +313,7 @@ class DcRepository:
     def suggested_urls(self) -> Dict[str, str]:
         return dict(self._suggested)
 
-    def storage_url(self, dc_id: "str | int") -> Optional[str]:
+    def storage_url(self, dc_id: str | int) -> Optional[str]:
         """Full ``GetFile.ashx`` URL of a DC, as used by the web client for downloads."""
         value = self.storages.get(str(dc_id))
         return str(value) if value else None
@@ -325,12 +327,12 @@ class DcRepository:
         return {"dcs": dict(self._data), "suggested_urls": dict(self._suggested)}
 
     @classmethod
-    def from_dict(cls, value: Optional[Dict[str, Any]]) -> "DcRepository":
+    def from_dict(cls, value: Optional[Dict[str, Any]]) -> DcRepository:
         if not isinstance(value, dict):
             return cls()
         return cls(value.get("dcs") or {}, value.get("suggested_urls") or {})
 
-    def merge_urls(self, dc_type: "DcType | str", extra: Iterable[str]) -> None:
+    def merge_urls(self, dc_type: DcType | str, extra: Iterable[str]) -> None:
         """Append user-configured URLs (for example custom socket URLs)."""
         normalized = DcDiscovery._normalize_dc_type(dc_type)
         key = self._KEYS.get(normalized)
@@ -347,17 +349,17 @@ class DcRepository:
 
 
 __all__ = [
+    "BARCODE_URL",
+    "BASE_INFO_URL",
+    "DC_DISCOVERY_URL",
+    "DEFAULT_API_URL",
+    "DEFAULT_CLIENT_INFO",
+    "DEFAULT_RUBINO_URL",
+    "DEFAULT_SOCKET_URL",
+    "DEFAULT_WALLET_URL",
+    "SERVICES_URL",
+    "WEBAPP_URL",
     "DcDiscovery",
     "DcRepository",
     "normalize_url",
-    "DEFAULT_API_URL",
-    "DEFAULT_SOCKET_URL",
-    "DEFAULT_RUBINO_URL",
-    "DEFAULT_WALLET_URL",
-    "DEFAULT_CLIENT_INFO",
-    "DC_DISCOVERY_URL",
-    "BASE_INFO_URL",
-    "SERVICES_URL",
-    "WEBAPP_URL",
-    "BARCODE_URL",
 ]

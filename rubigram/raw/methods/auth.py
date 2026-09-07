@@ -155,18 +155,18 @@ class ActionOnUnconfirmedSession(RawMethod[Empty]):
 
 
 __all__ = [
+    "ActionOnUnconfirmedSession",
+    "GetMySessions",
+    "GetTime",
+    "GetUnconfirmedSessions",
+    "LoginDisableTwoStep",
+    "LoginTwoStepForgetPassword",
+    "Logout",
+    "RegisterDevice",
     "SendCode",
     "SignIn",
     "SignUp",
-    "LoginTwoStepForgetPassword",
-    "LoginDisableTwoStep",
-    "RegisterDevice",
-    "UnregisterDevice",
-    "Logout",
-    "GetTime",
-    "GetMySessions",
-    "TerminateSession",
     "TerminateOtherSessions",
-    "GetUnconfirmedSessions",
-    "ActionOnUnconfirmedSession",
+    "TerminateSession",
+    "UnregisterDevice",
 ]

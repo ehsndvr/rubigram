@@ -50,4 +50,4 @@ class Empty(RawObject):
     """Result of methods whose response carries no data."""
 
 
-__all__ = ["RawObject", "Empty"]
+__all__ = ["Empty", "RawObject"]

@@ -23,11 +23,30 @@ from .peer import Peer
 from .version import __version__
 
 __all__ = [
+    "AuthError",
+    "BotApiError",
     "Client",
     "CodeCallback",
-    "Transport",
-    "RetryPolicy",
+    "ContinuePropagation",
+    "DecodeError",
+    # handlers
+    "Handler",
+    "InvalidAuth",
+    "InvalidInput",
+    "LoginRequired",
+    "MessageHandler",
+    "NetworkError",
+    "NotRegistered",
     "Peer",
+    "RetryPolicy",
+    "RpcError",
+    # errors
+    "RubigramError",
+    "RubikaError",
+    "StopPropagation",
+    "TooRequests",
+    "Transport",
+    "TransportError",
     "__version__",
     # namespaces
     "crypto",
@@ -38,23 +57,4 @@ __all__ = [
     "raw",
     "storage",
     "types",
-    # errors
-    "RubigramError",
-    "RubikaError",
-    "TransportError",
-    "NetworkError",
-    "DecodeError",
-    "AuthError",
-    "LoginRequired",
-    "RpcError",
-    "InvalidInput",
-    "InvalidAuth",
-    "NotRegistered",
-    "TooRequests",
-    "BotApiError",
-    # handlers
-    "Handler",
-    "MessageHandler",
-    "StopPropagation",
-    "ContinuePropagation",
 ]

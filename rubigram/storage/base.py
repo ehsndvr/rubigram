@@ -299,9 +299,18 @@ class Storage(ABC):
 
     async def clear_auth(self) -> None:
         """Forget the login (auth, tmp session, user guid, device registration)."""
-        for name in ("auth", "tmp_session", "user_guid", "registered_device_version", "updates_state", "chat_states", "contacts_state", "folders_state"):
+        for name in (
+            "auth",
+            "tmp_session",
+            "user_guid",
+            "registered_device_version",
+            "updates_state",
+            "chat_states",
+            "contacts_state",
+            "folders_state",
+        ):
             self._set(FIELD_MAP[name], None)
         self._set(FIELD_MAP["registered_device"], False)
 
 
-__all__ = ["Storage", "Field", "FIELDS", "FIELD_MAP", "SECRET_FIELDS", "DEFAULT_API_VERSION", "encode_value", "decode_value"]
+__all__ = ["DEFAULT_API_VERSION", "FIELDS", "FIELD_MAP", "SECRET_FIELDS", "Field", "Storage", "decode_value", "encode_value"]

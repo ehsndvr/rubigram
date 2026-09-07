@@ -1,4 +1,6 @@
 """Read-only checks of a logged-in user session (see conftest.py)."""
+# pyright: reportOptionalMemberAccess=false
+# (tests assert on parsed payloads; a missing field is a test failure)
 
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ def test_user_session_read_only_calls():
             if not await client.storage.auth():
                 pytest.skip("session file has no auth; log in first")
             server_time = await client.get_time()
-            assert server_time.timestamp
+            assert server_time.time
             me = await client.get_me()
             assert isinstance(me, types.UserInfo) and me.user.user_guid
             chats = await client.get_chats()

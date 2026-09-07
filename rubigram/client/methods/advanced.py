@@ -16,30 +16,28 @@ Decrypted answers go through :func:`rubigram.errors.raise_for_status`, so
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, TypeVar
+from typing import Any, Dict, Optional, TypeVar
 
+from rubigram.client.base import BaseClient
 from rubigram.enums import DcType
-from rubigram.errors import AuthError, DecodeError, LoginRequired, NotRegistered, RubigramError, TransportError, is_ok, map_rpc_error
-from rubigram.peer import Peer
+from rubigram.errors import AuthError, DecodeError, LoginRequired, NotRegistered, TransportError, is_ok, map_rpc_error
 from rubigram.raw.base import RawMethod
 from rubigram.raw.functions import build_data_object, build_plain_payload
+from rubigram.raw.methods import SignIn, SignUp
 from rubigram.types import RawObject
-from rubigram.utils import generate_tmp_session, new_rnd
-
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
+from rubigram.utils import generate_tmp_session
 
 log = logging.getLogger(__name__)
 ResultT = TypeVar("ResultT")
 PeerLike = Any
 
 
-class Advanced:
+class Advanced(BaseClient):
     """Low-level entry points and helpers (mixed into :class:`~rubigram.Client`)."""
 
     # -- public low level ------------------------------------------------
 
-    async def invoke(self: "Client", method: RawMethod[ResultT], *, timeout: Optional[float] = None, retries: Optional[int] = None) -> ResultT:
+    async def invoke(self, method: RawMethod[ResultT], *, timeout: Optional[float] = None, retries: Optional[int] = None) -> ResultT:
         """Send a raw method and return its typed result.
 
         Raises :class:`~rubigram.errors.RpcError` subclasses for server
@@ -60,12 +58,12 @@ class Advanced:
         return method.parse_response(self, data)
 
     async def invoke_raw(
-        self: "Client",
+        self,
         method_name: str,
         input_data: Optional[Dict[str, Any]] = None,
         *,
         auth_mode: str = "auth",
-        dc_type: "DcType | str" = DcType.API,
+        dc_type: DcType | str = DcType.API,
         api_version: Optional[str] = None,
         service_url: Optional[str] = None,
         timeout: Optional[float] = None,
@@ -89,23 +87,25 @@ class Advanced:
             "to_input": lambda self: dict(self._input),
         }
         if service_url or (known is not None and getattr(known, "service_url", None)):
-            namespace["service_url"] = service_url or getattr(known, "service_url")
+            namespace["service_url"] = service_url or getattr(known, "service_url", None)
         dynamic = type("DynamicRawMethod", (RawMethod,), namespace)
         return await self.invoke(dynamic(), timeout=timeout, retries=retries)  # type: ignore[abstract]
 
     # -- the seam --------------------------------------------------------
 
-    async def _call_rpc(self: "Client", method: RawMethod[Any], *, timeout: Optional[float], retries: Optional[int], allow_register_retry: bool) -> Any:
+    async def _call_rpc(
+        self, method: RawMethod[Any], *, timeout: Optional[float], retries: Optional[int], allow_register_retry: bool
+    ) -> Any:
         if not self.is_connected or self._codec is None or self._http is None:
             raise AuthError("Client not started. Call start() first.")
         request_key = await self._resolve_request_key(method)
         if method.auth_mode == "auth" and method.name != "registerDevice":
             await self._ensure_registered_device()
-        if method.auth_mode == "tmp" and method.name in {"signIn", "signUp"} and getattr(method, "public_key", None) is None:
+        if isinstance(method, (SignIn, SignUp)) and method.public_key is None:
             public_key = await self.storage.public_key()
             if not public_key:
                 raise AuthError("Public key is missing for the login flow")
-            setattr(method, "public_key", public_key)
+            method.public_key = public_key
 
         data_object = build_data_object(method.name, method.to_input(), self.client_info)
         api_version = method.api_version or await self.storage.api_version()
@@ -123,7 +123,7 @@ class Advanced:
             raise DecodeError(f"Response of {method.name} has no data_enc: {response}")
         try:
             decrypted = self._codec.decrypt_response(response, request_key)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise DecodeError(f"Failed to decrypt the response of {method.name}: {exc}") from exc
         if not is_ok(decrypted):
             error = map_rpc_error(str(decrypted.get("status")), decrypted.get("status_det"), decrypted, method=method.name)
@@ -135,12 +135,16 @@ class Advanced:
         await self.storage.set_api_url(transport.pool.get_current())
         return decrypted.get("data", decrypted) if isinstance(decrypted, dict) else decrypted
 
-    async def _call_service(self: "Client", method: RawMethod[Any], *, timeout: Optional[float], retries: Optional[int]) -> Any:
+    async def _call_service(self, method: RawMethod[Any], *, timeout: Optional[float], retries: Optional[int]) -> Any:
         if not self.is_connected or self._service is None:
             raise AuthError("Client not started. Call start() first.")
         auth = await self.storage.auth()
         api_version = method.api_version or "0"
-        client_info = self.service_client_info if method.dc_type in (DcType.RUBINO, DcType.WALLET) or getattr(type(method), "service_url", None) else self.client_info
+        client_info = (
+            self.service_client_info
+            if method.dc_type in (DcType.RUBINO, DcType.WALLET) or getattr(type(method), "service_url", None)
+            else self.client_info
+        )
         payload = build_plain_payload(method.name, method.to_input(), api_version=api_version, client_info=client_info, auth=auth)
         url = getattr(type(method), "service_url", None)
         if url is None:
@@ -154,13 +158,13 @@ class Advanced:
             raise map_rpc_error(str(response.get("status")), response.get("status_det"), response, method=method.name)
         return response.get("data", response)
 
-    def _transport_for(self: "Client", dc_type: DcType) -> Any:
+    def _transport_for(self, dc_type: DcType) -> Any:
         if dc_type is DcType.BOT and self._bot_dc_http is not None:
             return self._bot_dc_http
         assert self._http is not None
         return self._http
 
-    async def _resolve_request_key(self: "Client", method: RawMethod[Any]) -> str:
+    async def _resolve_request_key(self, method: RawMethod[Any]) -> str:
         if method.auth_mode == "tmp":
             tmp_session = await self.storage.tmp_session()
             if not tmp_session:
@@ -173,60 +177,5 @@ class Advanced:
             raise LoginRequired("This method requires an authenticated session")
         return auth
 
-    # -- shared helpers --------------------------------------------------
 
-    @property
-    def client_info(self: "Client") -> Dict[str, str]:
-        """The ``client`` block of encrypted RPCs."""
-        return dict(self.device_info)
-
-    @property
-    def service_client_info(self: "Client") -> Dict[str, str]:
-        """The ``client`` block of service calls (platform ``PWA``)."""
-        return {
-            "app_name": self.device_info.get("app_name", self.APP_NAME),
-            "app_version": self.device_info.get("app_version", self.app_version),
-            "platform": self.PWA_PLATFORM,
-            "package": self.device_info.get("package", self.PACKAGE),
-        }
-
-    def _service_client_info(self: "Client") -> Dict[str, str]:
-        return self.service_client_info
-
-    @staticmethod
-    def _new_rnd() -> str:
-        return new_rnd()
-
-    def _resolve_peer(self, peer: PeerLike) -> Peer:
-        return Peer.from_value(peer)
-
-    def _resolve_object_guid(self, object_guid: PeerLike = None, *, peer: PeerLike = None) -> str:
-        candidate = peer if peer is not None else object_guid
-        if candidate is None:
-            raise ValueError("Either object_guid or peer must be provided")
-        return Peer.from_value(candidate).object_guid
-
-    def _resolve_user_guid(self, user_guid: PeerLike) -> str:
-        resolved = Peer.from_value(user_guid).user_guid
-        if not resolved:
-            raise ValueError("user_guid could not be resolved from peer")
-        return resolved
-
-    def _resolve_guids(self, values: Optional[Iterable[PeerLike]]) -> List[str]:
-        return [self._resolve_object_guid(value) for value in (values or ())]
-
-    @staticmethod
-    def _plain_list(values: Optional[Sequence[Any]]) -> List[str]:
-        return [str(getattr(item, "value", item)) for item in (values or ())]
-
-    def _require_user_session(self: "Client", what: str = "This method") -> None:
-        if self.is_bot:
-            raise RubigramError(f"{what} is only available on a phone-number (user) session")
-
-    def _require_bot(self: "Client", what: str = "This method") -> Any:
-        if not self.is_bot or self._bot is None:
-            raise RubigramError(f"{what} is only available on a bot-token session")
-        return self._bot
-
-
-__all__ = ["Advanced", "PeerLike"]
+__all__ = ["Advanced"]

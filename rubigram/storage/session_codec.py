@@ -49,7 +49,7 @@ def load_session_string(session_string: str) -> dict[str, Any]:
     if not value:
         raise StorageError("Session string is empty")
     if value.startswith(PREFIX_V2):
-        payload = _b64decode(value[len(PREFIX_V2):])
+        payload = _b64decode(value[len(PREFIX_V2) :])
         if len(payload) < 5:
             raise StorageError("Session string is truncated")
         checksum, compressed = payload[:4], payload[4:]

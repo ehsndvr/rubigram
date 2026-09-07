@@ -45,7 +45,7 @@ class _RetryableFailure(Exception):
 class _BaseHttpTransport:
     def __init__(
         self,
-        pool: "UrlPool | Iterable[str] | str",
+        pool: UrlPool | Iterable[str] | str,
         *,
         timeout: float = 20.0,
         proxy: Optional[str] = None,
@@ -114,7 +114,15 @@ class _BaseHttpTransport:
             raise TransportError(f"Unexpected response type from {url}: {type(data).__name__}")
         return data
 
-    async def _send(self, body: str, *, timeout: Optional[float], retries: Optional[int], url: Optional[str] = None, extra_headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    async def _send(
+        self,
+        body: str,
+        *,
+        timeout: Optional[float],
+        retries: Optional[int],
+        url: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         policy = self._retry_policy.with_overrides(retries=retries, timeout=timeout)
         refreshed = False
 
@@ -130,7 +138,7 @@ class _BaseHttpTransport:
                     refreshed = True
                     try:
                         urls = await self._refresh_urls()
-                    except Exception as refresh_exc:  # noqa: BLE001 - discovery failures must not mask the request error
+                    except Exception as refresh_exc:
                         log.debug("URL refresh failed: %s", refresh_exc)
                         urls = None
                     if urls:
@@ -174,7 +182,9 @@ class JsonTransport(_BaseHttpTransport):
     def _default_headers(self, user_agent: Optional[str]) -> Dict[str, str]:
         return build_json_headers(user_agent)
 
-    async def send(self, payload: Dict[str, Any], *, url: Optional[str] = None, timeout: Optional[float] = None, retries: Optional[int] = None) -> Dict[str, Any]:
+    async def send(
+        self, payload: Dict[str, Any], *, url: Optional[str] = None, timeout: Optional[float] = None, retries: Optional[int] = None
+    ) -> Dict[str, Any]:
         body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
         return await self._send(body, timeout=timeout, retries=retries, url=url)
 
@@ -185,4 +195,4 @@ class JsonTransport(_BaseHttpTransport):
 # Backward-compatible name.
 RpcTransport = HttpTransport
 
-__all__ = ["HttpTransport", "JsonTransport", "RpcTransport", "HttpRequestRecord"]
+__all__ = ["HttpRequestRecord", "HttpTransport", "JsonTransport", "RpcTransport"]

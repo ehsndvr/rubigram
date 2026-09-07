@@ -14,7 +14,7 @@ from rubigram.types import Message, SentCode
 
 async def ask_code(sent: SentCode) -> str:
     """Called once per login attempt with the ``sendCode`` result."""
-    return input(f"Code sent by {sent.send_type or 'SMS'} ({sent.code_digits_count or 5} digits): ")
+    return await asyncio.to_thread(input, f"Code sent by {sent.send_type or 'SMS'} ({sent.code_digits_count or 5} digits): ")
 
 
 app = Client("my_account", phone_number=os.environ.get("RUBIGRAM_PHONE"), code_callback=ask_code)

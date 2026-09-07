@@ -111,7 +111,9 @@ def normalize_parse_mode(parse_mode: Any) -> Optional[ParseMode]:
     raise ValueError(f"Unsupported parse_mode: {parse_mode!r}")
 
 
-def build_message_metadata(text: Optional[str], *, entities: Optional[Sequence[MessageEntity]] = None, parse_mode: Any = None) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+def build_message_metadata(
+    text: Optional[str], *, entities: Optional[Sequence[MessageEntity]] = None, parse_mode: Any = None
+) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
     """Return ``(plain_text, metadata)`` for ``sendMessage`` / ``editMessage``.
 
     Either explicit ``entities`` or a ``parse_mode`` may be given, not both.
@@ -131,4 +133,4 @@ def build_message_metadata(text: Optional[str], *, entities: Optional[Sequence[M
     return plain, entities_to_metadata(parsed)
 
 
-__all__ = ["build_message_metadata", "entities_to_metadata", "parse_markdown", "parse_html", "normalize_parse_mode"]
+__all__ = ["build_message_metadata", "entities_to_metadata", "normalize_parse_mode", "parse_html", "parse_markdown"]

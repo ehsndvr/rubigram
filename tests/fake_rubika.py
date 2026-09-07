@@ -15,8 +15,9 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from rubigram.client import client as client_module
 from rubigram.crypto import caesar_decode, change_auth_type, decrypt_aes_cbc, encrypt_aes_cbc
@@ -65,6 +66,7 @@ def rsa_wrap(public_key_pem_or_b64: str, value: str) -> str:
     if "BEGIN" not in raw:
         raw = base64.b64decode(change_auth_type(raw)).decode("utf-8")
     public_key = serialization.load_pem_public_key(raw.encode("utf-8"))
+    assert isinstance(public_key, RSAPublicKey)
     return base64.b64encode(public_key.encrypt(value.encode("utf-8"), asym_padding.PKCS1v15())).decode("utf-8")
 
 
@@ -157,10 +159,12 @@ class FakeServices:
         self.responses: Dict[str, Any] = {"getBaseInfo": BASE_INFO_PAYLOAD}
         self.closed = False
 
-    async def send(self, payload: Dict[str, Any], *, url: Optional[str] = None, timeout: Optional[float] = None, retries: Optional[int] = None) -> Dict[str, Any]:
+    async def send(
+        self, payload: Dict[str, Any], *, url: Optional[str] = None, timeout: Optional[float] = None, retries: Optional[int] = None
+    ) -> Dict[str, Any]:
         method = payload.get("method", "")
         self.calls.append((method, payload, url))
-        answer = self.responses.get(method, {"status": "OK", "status_det": "OK", "data": {}})
+        answer: Any = self.responses.get(method, {"status": "OK", "status_det": "OK", "data": {}})
         if isinstance(answer, Exception):
             raise answer
         if callable(answer):
@@ -243,7 +247,9 @@ class FakeBotTransport:
         raise AssertionError(f"{method} was not called")
 
 
-def install(monkeypatch: Any, *, rubika: Optional[FakeRubika] = None, services: Optional[FakeServices] = None) -> Tuple[FakeRubika, FakeServices]:
+def install(
+    monkeypatch: Any, *, rubika: Optional[FakeRubika] = None, services: Optional[FakeServices] = None
+) -> Tuple[FakeRubika, FakeServices]:
     """Route every transport ``Client`` builds to the fakes."""
     rubika = rubika or FakeRubika()
     services = services or FakeServices()

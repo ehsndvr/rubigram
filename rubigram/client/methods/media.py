@@ -5,24 +5,24 @@ from __future__ import annotations
 import time
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
+from rubigram.client.base import BaseClient
 from rubigram.errors import LoginRequired, TransportError
 from rubigram.raw.functions import build_file_inline, guess_upload_mime
 from rubigram.raw.methods import AddSetWallpaper, DeleteAvatar, GetWallpapers, RequestSendFile, ResetWallpapers, UploadAvatar
 from rubigram.types import Empty, RawObject, SentMessage, UploadDescriptor
 from rubigram.utils import parse_ogg_opus_duration_ms
 
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
-
 ProgressCallback = Any
 
 
-class Media:
+class Media(BaseClient):
     # -- upload ----------------------------------------------------------------
 
-    async def request_send_file(self: "Client", file_name: Optional[str] = None, size: Optional[int] = None, mime: Optional[str] = None, *, type: Any = None) -> Any:
+    async def request_send_file(
+        self, file_name: Optional[str] = None, size: Optional[int] = None, mime: Optional[str] = None, *, type: Any = None
+    ) -> Any:
         """``requestSendFile``: an upload slot (``upload_url``, ``id``, ``dc_id``, ``access_hash_send``). [HTTP][bot]"""
         if self.is_bot:
             if type is None:
@@ -33,7 +33,7 @@ class Media:
         return await self.invoke(RequestSendFile(file_name=file_name, size=int(size), mime=mime or guess_upload_mime(file_name)))
 
     async def upload_file(
-        self: "Client",
+        self,
         path: Union[str, Path, None] = None,
         *,
         data: Optional[bytes] = None,
@@ -60,15 +60,19 @@ class Media:
             name = file_name or (Path(path).name if path is not None else f"file_{int(time.time())}")
             size = len(data) if data is not None else Path(path).stat().st_size  # type: ignore[arg-type]
             descriptor = await self.request_send_file(name, size, mime or guess_upload_mime(name))
-        return await self._upload.upload_file(auth=auth, descriptor=descriptor, path=path, data=data, progress=progress, progress_args=progress_args)
+        return await self._upload.upload_file(
+            auth=auth, descriptor=descriptor, path=path, data=data, progress=progress, progress_args=progress_args
+        )
 
-    async def _upload_file(self: "Client", *, path: Union[str, Path], descriptor: UploadDescriptor, progress: Any = None, progress_args: tuple[Any, ...] = ()) -> UploadDescriptor:
+    async def _upload_file(
+        self, *, path: Union[str, Path], descriptor: UploadDescriptor, progress: Any = None, progress_args: tuple[Any, ...] = ()
+    ) -> UploadDescriptor:
         return await self.upload_file(path, descriptor=descriptor, progress=progress, progress_args=progress_args)
 
     # -- download --------------------------------------------------------------
 
     async def download_file(
-        self: "Client",
+        self,
         file: Any,
         path: Union[str, Path, None] = None,
         *,
@@ -102,8 +106,8 @@ class Media:
             file_size = None
         return await self._download.download_file(
             auth=auth,
-            file_id=getattr(target, "file_id"),
-            access_hash_rec=getattr(target, "access_hash_rec"),
+            file_id=target.file_id,
+            access_hash_rec=target.access_hash_rec,
             url=url,
             dc_id=dc_id,
             file_size=file_size,
@@ -113,17 +117,28 @@ class Media:
             progress_args=progress_args,
         )
 
-    async def download_url(self: "Client", url: str, path: Union[str, Path, None] = None, *, in_memory: bool = False, file_name: Optional[str] = None, progress: Optional[ProgressCallback] = None, progress_args: tuple[Any, ...] = ()) -> Union[bytes, Path]:
+    async def download_url(
+        self,
+        url: str,
+        path: Union[str, Path, None] = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Optional[ProgressCallback] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Union[bytes, Path]:
         """Download a public URL (Rubino media, CDN) to disk or memory. [HTTP]"""
-        if self._download is None:
-            self._download = self._make_download_transport()
+        transport = self._download or self._make_download_transport()
+        self._download = transport
         destination = None if in_memory else self._resolve_download_destination(path, file_name or self._default_file_name_from_url(url))
-        return await self._download.download_url(url=url, path=destination, in_memory=in_memory, progress=progress, progress_args=progress_args)
+        return await transport.download_url(url=url, path=destination, in_memory=in_memory, progress=progress, progress_args=progress_args)
 
-    def _make_download_transport(self: "Client") -> Any:
+    def _make_download_transport(self) -> Any:
         from rubigram.network import DownloadTransport
 
-        return DownloadTransport(timeout=max(self.timeout, 30.0), proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent)
+        return DownloadTransport(
+            timeout=max(self.timeout, 30.0), proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent
+        )
 
     @staticmethod
     def _resolve_download_target(file: Any) -> Any:
@@ -166,7 +181,7 @@ class Media:
     # -- media messages ------------------------------------------------------------
 
     async def send_media(
-        self: "Client",
+        self,
         object_guid: Any = None,
         path: Union[str, Path, None] = None,
         *,
@@ -220,34 +235,109 @@ class Media:
             music_performer=music_performer,
             extra=extra_file_inline,
         )
-        return await self.send_message(guid, text, rnd=rnd, file_inline=file_inline, reply_to_message_id=reply_to_message_id, parse_mode=parse_mode)
+        return await self.send_message(
+            guid, text, rnd=rnd, file_inline=file_inline, reply_to_message_id=reply_to_message_id, parse_mode=parse_mode
+        )
 
-    async def send_uploaded_media(self: "Client", *, object_guid: Any = None, path: Union[str, Path], media_type: str, **kwargs: Any) -> SentMessage:
+    async def send_uploaded_media(self, *, object_guid: Any = None, path: Union[str, Path], media_type: str, **kwargs: Any) -> SentMessage:
         """rubigram 0.1 name of :meth:`send_media`."""
         warnings.warn("send_uploaded_media() is deprecated; use send_media()", DeprecationWarning, stacklevel=2)
         return await self.send_media(object_guid, path, media_type=media_type, **kwargs)
 
-    async def send_photo(self: "Client", object_guid: Any = None, path: Union[str, Path, None] = None, *, text: Optional[str] = None, width: Optional[int] = None, height: Optional[int] = None, is_spoil: Optional[bool] = None, **kwargs: Any) -> Any:
+    async def send_photo(
+        self,
+        object_guid: Any = None,
+        path: Union[str, Path, None] = None,
+        *,
+        text: Optional[str] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        is_spoil: Optional[bool] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Send an image. [HTTP][bot]"""
-        return await self.send_media(object_guid, path, media_type="Image", text=text, width=width, height=height, is_spoil=is_spoil, **kwargs)
+        return await self.send_media(
+            object_guid, path, media_type="Image", text=text, width=width, height=height, is_spoil=is_spoil, **kwargs
+        )
 
-    async def send_video(self: "Client", object_guid: Any = None, path: Union[str, Path, None] = None, *, text: Optional[str] = None, duration_ms: Optional[float] = None, width: Optional[int] = None, height: Optional[int] = None, is_round: bool = False, is_spoil: bool = False, thumb_inline: Optional[str] = None, **kwargs: Any) -> Any:
+    async def send_video(
+        self,
+        object_guid: Any = None,
+        path: Union[str, Path, None] = None,
+        *,
+        text: Optional[str] = None,
+        duration_ms: Optional[float] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        is_round: bool = False,
+        is_spoil: bool = False,
+        thumb_inline: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Send a video (``duration_ms``/``width``/``height`` are what the apps display). [HTTP][bot]"""
-        return await self.send_media(object_guid, path, media_type="Video", text=text, duration_ms=duration_ms, width=width, height=height, is_round=is_round, is_spoil=is_spoil, thumb_inline=thumb_inline, **kwargs)
+        return await self.send_media(
+            object_guid,
+            path,
+            media_type="Video",
+            text=text,
+            duration_ms=duration_ms,
+            width=width,
+            height=height,
+            is_round=is_round,
+            is_spoil=is_spoil,
+            thumb_inline=thumb_inline,
+            **kwargs,
+        )
 
-    async def send_gif(self: "Client", object_guid: Any = None, path: Union[str, Path, None] = None, *, text: Optional[str] = None, width: Optional[int] = None, height: Optional[int] = None, duration_ms: Optional[float] = None, **kwargs: Any) -> Any:
-        return await self.send_media(object_guid, path, media_type="Gif", text=text, width=width, height=height, duration_ms=duration_ms, **kwargs)
+    async def send_gif(
+        self,
+        object_guid: Any = None,
+        path: Union[str, Path, None] = None,
+        *,
+        text: Optional[str] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        duration_ms: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Send an animated GIF. [HTTP][bot]"""
+        return await self.send_media(
+            object_guid, path, media_type="Gif", text=text, width=width, height=height, duration_ms=duration_ms, **kwargs
+        )
 
-    async def send_voice(self: "Client", object_guid: Any = None, path: Union[str, Path, None] = None, *, duration_ms: Optional[float] = None, text: Optional[str] = None, **kwargs: Any) -> Any:
+    async def send_voice(
+        self,
+        object_guid: Any = None,
+        path: Union[str, Path, None] = None,
+        *,
+        duration_ms: Optional[float] = None,
+        text: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Send a voice note; the duration is read from OGG/Opus files when omitted. [HTTP][bot]"""
         if not self.is_bot and path is not None:
             duration_ms = self._resolve_voice_duration_ms(Path(path), duration_ms)
         return await self.send_media(object_guid, path, media_type="Voice", text=text, duration_ms=duration_ms, **kwargs)
 
-    async def send_music(self: "Client", object_guid: Any = None, path: Union[str, Path, None] = None, *, duration_ms: Optional[float] = None, music_performer: Optional[str] = None, text: Optional[str] = None, **kwargs: Any) -> Any:
-        return await self.send_media(object_guid, path, media_type="Music", text=text, duration_ms=duration_ms, music_performer=music_performer, **kwargs)
+    async def send_music(
+        self,
+        object_guid: Any = None,
+        path: Union[str, Path, None] = None,
+        *,
+        duration_ms: Optional[float] = None,
+        music_performer: Optional[str] = None,
+        text: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Send an audio track with an optional performer name. [HTTP][bot]"""
+        return await self.send_media(
+            object_guid, path, media_type="Music", text=text, duration_ms=duration_ms, music_performer=music_performer, **kwargs
+        )
 
-    async def send_document(self: "Client", object_guid: Any = None, path: Union[str, Path, None] = None, *, text: Optional[str] = None, **kwargs: Any) -> Any:
+    async def send_document(
+        self, object_guid: Any = None, path: Union[str, Path, None] = None, *, text: Optional[str] = None, **kwargs: Any
+    ) -> Any:
+        """Send any file as a document (``File`` media type). [HTTP][bot]"""
         return await self.send_media(object_guid, path, media_type="File", text=text, **kwargs)
 
     send_file_message = send_document
@@ -267,38 +357,56 @@ class Media:
 
     # -- avatars and wallpapers ------------------------------------------------------
 
-    async def upload_avatar(self: "Client", object_guid: Any, path: Union[str, Path], *, thumbnail_path: Union[str, Path, None] = None, progress: Optional[ProgressCallback] = None, progress_args: tuple[Any, ...] = ()) -> RawObject:
+    async def upload_avatar(
+        self,
+        object_guid: Any,
+        path: Union[str, Path],
+        *,
+        thumbnail_path: Union[str, Path, None] = None,
+        progress: Optional[ProgressCallback] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> RawObject:
         """Set the avatar of a user (own guid), group or channel (``uploadAvatar``). [HTTP]"""
         main = await self.upload_file(path, progress=progress, progress_args=progress_args)
         thumb = await self.upload_file(thumbnail_path) if thumbnail_path else main
-        return await self.invoke(UploadAvatar(object_guid=self._resolve_object_guid(object_guid), thumbnail_file_id=str(thumb.id), main_file_id=str(main.id)))
+        return await self.invoke(
+            UploadAvatar(object_guid=self._resolve_object_guid(object_guid), thumbnail_file_id=str(thumb.id), main_file_id=str(main.id))
+        )
 
-    async def set_profile_photo(self: "Client", path: Union[str, Path], **kwargs: Any) -> RawObject:
+    async def set_profile_photo(self, path: Union[str, Path], **kwargs: Any) -> RawObject:
+        """Set your own profile picture (``uploadAvatar`` on the logged-in guid). [HTTP]"""
         user_guid = await self.storage.user_guid()
         if not user_guid:
             raise LoginRequired("set_profile_photo requires an authenticated session")
         return await self.upload_avatar(user_guid, path, **kwargs)
 
-    async def set_group_photo(self: "Client", object_guid: Any = None, path: Union[str, Path] = "", *, peer: Any = None, **kwargs: Any) -> RawObject:
+    async def set_group_photo(self, object_guid: Any = None, path: Union[str, Path] = "", *, peer: Any = None, **kwargs: Any) -> RawObject:
+        """Set the avatar of a group (``uploadAvatar``). [HTTP]"""
         return await self.upload_avatar(peer if peer is not None else object_guid, path, **kwargs)
 
     set_channel_photo = set_group_photo
 
-    async def upload_group_avatar(self: "Client", object_guid: Any = None, path: Union[str, Path] = "", *, peer: Any = None, **kwargs: Any) -> RawObject:
+    async def upload_group_avatar(
+        self, object_guid: Any = None, path: Union[str, Path] = "", *, peer: Any = None, **kwargs: Any
+    ) -> RawObject:
         """rubigram 0.1 name of :meth:`set_group_photo`."""
         warnings.warn("upload_group_avatar() is deprecated; use set_group_photo()", DeprecationWarning, stacklevel=2)
         return await self.set_group_photo(object_guid, path, peer=peer, **kwargs)
 
-    async def delete_avatar(self: "Client", object_guid: Any, avatar_id: str) -> RawObject:
+    async def delete_avatar(self, object_guid: Any, avatar_id: str) -> RawObject:
+        """Delete one avatar of a user, group or channel (``deleteAvatar``). [HTTP]"""
         return await self.invoke(DeleteAvatar(object_guid=self._resolve_object_guid(object_guid), avatar_id=avatar_id))
 
-    async def get_wallpapers(self: "Client") -> RawObject:
+    async def get_wallpapers(self) -> RawObject:
+        """Built-in and custom chat wallpapers (``getWallpapers``). [HTTP]"""
         return await self.invoke(GetWallpapers())
 
-    async def add_set_wallpaper(self: "Client", thumbnail_file_id: str, main_file_id: str) -> RawObject:
+    async def add_set_wallpaper(self, thumbnail_file_id: str, main_file_id: str) -> RawObject:
+        """Upload ids of a custom chat wallpaper (``addSetWallpaper``). [HTTP]"""
         return await self.invoke(AddSetWallpaper(thumbnail_file_id=thumbnail_file_id, main_file_id=main_file_id))
 
-    async def reset_wallpapers(self: "Client") -> Empty:
+    async def reset_wallpapers(self) -> Empty:
+        """Remove custom wallpapers (``resetWallpapers``). [HTTP]"""
         return await self.invoke(ResetWallpapers())
 
 

@@ -64,7 +64,9 @@ class BotTransport:
 
     _build_method_url = build_method_url
 
-    async def call_method(self, method: str, payload: Optional[Dict[str, Any]] = None, *, timeout: Optional[float] = None, retries: Optional[int] = None) -> Dict[str, Any]:
+    async def call_method(
+        self, method: str, payload: Optional[Dict[str, Any]] = None, *, timeout: Optional[float] = None, retries: Optional[int] = None
+    ) -> Dict[str, Any]:
         """POST ``payload`` and return the raw JSON answer (``{"status": …, "data": …}``)."""
         client = await self._get_client()
         policy = self._retry_policy.with_overrides(retries=retries, timeout=timeout)
@@ -96,7 +98,9 @@ class BotTransport:
         except _Retry as failure:
             raise failure.error from failure.error
 
-    async def call(self, method: str, payload: Optional[Dict[str, Any]] = None, *, timeout: Optional[float] = None, retries: Optional[int] = None) -> Any:
+    async def call(
+        self, method: str, payload: Optional[Dict[str, Any]] = None, *, timeout: Optional[float] = None, retries: Optional[int] = None
+    ) -> Any:
         """Call a Bot API method and return its ``data`` / ``result`` part.
 
         Raises :class:`BotApiError` for ``ok: false`` answers and the mapped
@@ -124,13 +128,17 @@ class BotTransport:
             return response["data"]
         return response
 
-    async def upload_file(self, upload_url: str, path: Union[str, Path], *, field_name: str = "file", file_name: Optional[str] = None) -> Dict[str, Any]:
+    async def upload_file(
+        self, upload_url: str, path: Union[str, Path], *, field_name: str = "file", file_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Multipart upload to the URL returned by the bot ``requestSendFile``."""
         client = await self._get_client()
         file_path = Path(path)
         try:
             with file_path.open("rb") as stream:
-                response = await client.post(upload_url, files={field_name: (file_name or file_path.name, stream)}, timeout=max(self._timeout, 60.0))
+                response = await client.post(
+                    upload_url, files={field_name: (file_name or file_path.name, stream)}, timeout=max(self._timeout, 60.0)
+                )
         except httpx.TimeoutException as exc:
             raise RequestTimeout("Bot file upload timed out", exc) from exc
         except httpx.HTTPError as exc:
@@ -171,4 +179,4 @@ class BotTransport:
 
 BotApiTransport = BotTransport
 
-__all__ = ["BotTransport", "BotApiTransport"]
+__all__ = ["BotApiTransport", "BotTransport"]

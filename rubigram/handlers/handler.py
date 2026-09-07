@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, ClassVar, Optional
+from typing import Any, Callable, ClassVar
 
 
 class StopPropagation(Exception):
@@ -42,4 +42,4 @@ class Handler:
         return f"{type(self).__name__}({name}, filters={self.filters!r})"
 
 
-__all__ = ["Handler", "StopPropagation", "ContinuePropagation"]
+__all__ = ["ContinuePropagation", "Handler", "StopPropagation"]

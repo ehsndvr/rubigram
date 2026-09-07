@@ -26,6 +26,20 @@ import typing
 from dataclasses import InitVar, dataclass, fields, is_dataclass
 from typing import Any, Callable, ClassVar, Optional, TypeVar, Union, get_args, get_origin, get_type_hints
 
+if typing.TYPE_CHECKING:
+    from typing_extensions import dataclass_transform
+else:
+    try:  # Python 3.11+
+        from typing import dataclass_transform
+    except ImportError:  # pragma: no cover - Python 3.10
+
+        def dataclass_transform(**_kwargs: Any) -> Callable[[T], T]:
+            def decorator(value: T) -> T:
+                return value
+
+            return decorator
+
+
 if typing.TYPE_CHECKING:  # pragma: no cover - typing only
     import rubigram
 
@@ -45,14 +59,19 @@ def _parse_dynamic(client: Any, value: Any) -> Any:
     return value
 
 
-def _apply_unknown_fields(target: "Object", client: Any, data: dict[str, Any], known_fields: typing.Iterable[str]) -> None:
+def _apply_unknown_fields(target: Object, client: Any, data: dict[str, Any], known_fields: typing.Iterable[str]) -> None:
     """Attach keys of ``data`` that are not in ``known_fields`` to ``target``."""
     known = set(known_fields)
     for key, value in data.items():
         if key not in known:
             parsed = _parse_dynamic(client, value)
             target.extra[key] = parsed
-            if not key.startswith("_") and key.isidentifier() and not isinstance(getattr(type(target), key, None), (property, classmethod, staticmethod)) and not callable(getattr(type(target), key, None)):
+            if (
+                not key.startswith("_")
+                and key.isidentifier()
+                and not isinstance(getattr(type(target), key, None), (property, classmethod, staticmethod))
+                and not callable(getattr(type(target), key, None))
+            ):
                 setattr(target, key, parsed)
 
 
@@ -140,7 +159,7 @@ class Object:
             result[key] = _to_plain(value, include_none)
         return result
 
-    def bind(self, client: "rubigram.Client") -> None:
+    def bind(self, client: rubigram.Client) -> None:
         """Bind a client to this object and every nested object."""
         self._client = client
         for value in self.__dict__.values():
@@ -186,6 +205,7 @@ class Object:
         self.__dict__.setdefault("_client", None)
 
 
+@dataclass_transform(kw_only_default=True, eq_default=False)
 def model(cls: type[T]) -> type[T]:
     """Decorator turning a class into a keyword-only rubigram model."""
     return dataclass(kw_only=True, eq=False, repr=False)(cls)
@@ -289,4 +309,4 @@ def _bind_nested(value: Any, client: Any) -> None:
             _bind_nested(item, client)
 
 
-__all__ = ["Object", "model", "_parse_dynamic", "_apply_unknown_fields"]
+__all__ = ["Object", "_apply_unknown_fields", "_parse_dynamic", "model"]

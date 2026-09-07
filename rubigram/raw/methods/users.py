@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from rubigram.raw.base import RawMethod
@@ -216,26 +216,26 @@ class SetAskSpamAction(RawMethod[Any]):
 
 
 __all__ = [
-    "GetUserInfo",
-    "GetObjectByUsername",
+    "AddAddressBook",
+    "BlockUser",
+    "CheckUserUsername",
+    "DeleteContact",
     "GetAbsObjects",
     "GetAvatars",
+    "GetBlockedUsers",
+    "GetCommonGroups",
+    "GetContacts",
+    "GetContactsLastOnline",
+    "GetContactsUpdates",
+    "GetObjectByUsername",
+    "GetProfileLinkItems",
+    "GetUserInfo",
+    "ReportObject",
+    "ResetContacts",
+    "SearchGlobalObjects",
+    "SetAskSpamAction",
+    "SetBlockUser",
+    "UnblockUser",
     "UpdateProfile",
     "UpdateUsername",
-    "CheckUserUsername",
-    "SetBlockUser",
-    "BlockUser",
-    "UnblockUser",
-    "GetBlockedUsers",
-    "GetContacts",
-    "GetContactsUpdates",
-    "GetContactsLastOnline",
-    "AddAddressBook",
-    "DeleteContact",
-    "ResetContacts",
-    "GetProfileLinkItems",
-    "GetCommonGroups",
-    "SearchGlobalObjects",
-    "ReportObject",
-    "SetAskSpamAction",
 ]

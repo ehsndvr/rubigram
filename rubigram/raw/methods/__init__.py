@@ -6,20 +6,20 @@ from typing import Dict, Type
 
 from rubigram.raw.base import RawMethod
 from rubigram.raw.methods import auth, channels, chats, files, groups, messages, services, settings, stickers, users
-from rubigram.raw.methods.auth import *  # noqa: F401,F403
-from rubigram.raw.methods.channels import *  # noqa: F401,F403
-from rubigram.raw.methods.chats import *  # noqa: F401,F403
-from rubigram.raw.methods.files import *  # noqa: F401,F403
-from rubigram.raw.methods.groups import *  # noqa: F401,F403
-from rubigram.raw.methods.messages import *  # noqa: F401,F403
-from rubigram.raw.methods.services import *  # noqa: F401,F403
-from rubigram.raw.methods.settings import *  # noqa: F401,F403
-from rubigram.raw.methods.stickers import *  # noqa: F401,F403
-from rubigram.raw.methods.users import *  # noqa: F401,F403
+from rubigram.raw.methods.auth import *  # noqa: F403
+from rubigram.raw.methods.channels import *  # noqa: F403
+from rubigram.raw.methods.chats import *  # noqa: F403
+from rubigram.raw.methods.files import *  # noqa: F403
+from rubigram.raw.methods.groups import *  # noqa: F403
+from rubigram.raw.methods.messages import *  # noqa: F403
+from rubigram.raw.methods.services import *  # noqa: F403
+from rubigram.raw.methods.settings import *  # noqa: F403
+from rubigram.raw.methods.stickers import *  # noqa: F403
+from rubigram.raw.methods.users import *  # noqa: F403
 
 _MODULES = (auth, users, chats, messages, groups, channels, files, stickers, settings, services)
 
-__all__ = [name for module in _MODULES for name in module.__all__] + ["METHODS", "method_for"]
+__all__ = [name for module in _MODULES for name in module.__all__] + ["METHODS", "method_for"]  # pyright: ignore[reportUnsupportedDunderAll]
 
 
 def _build_registry() -> Dict[str, Type[RawMethod]]:

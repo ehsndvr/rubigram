@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
 from rubigram import Client, ContinuePropagation, StopPropagation, filters, handlers, types
+from rubigram.enums import MessageSender
 from rubigram.handlers import Dispatcher, MessageHandler
-from rubigram.types.bot import InlineMessage, Update as BotUpdate
+from rubigram.types.bot import InlineMessage
+from rubigram.types.bot import Update as BotUpdate
 
 from .fake_rubika import install, run, seed_session
 
@@ -35,11 +38,13 @@ def test_builtin_filters_read_user_and_bot_messages():
         assert not await filters.video(None, photo)
         edited = message(message_id="3", action="Edit", text="x")
         assert await filters.edited(None, edited) and not await filters.new(None, edited)
-        bot_message = types.bot.Message(client=None, message_id="4", text="/start now", chat_id="b0chat", sender_type="User")
+        bot_message = types.bot.Message(client=None, message_id="4", text="/start now", chat_id="b0chat", sender_type=MessageSender.USER)
         assert await filters.text(None, bot_message)
         assert await filters.command("start")(None, bot_message)
         assert not await filters.command("stop")(None, bot_message)
-        assert await filters.command(["help", "start"], prefixes=["/", "!"])(None, types.bot.Message(client=None, message_id="5", text="!Start"))
+        assert await filters.command(["help", "start"], prefixes=["/", "!"])(
+            None, types.bot.Message(client=None, message_id="5", text="!Start")
+        )
 
     run(scenario())
 
@@ -51,7 +56,7 @@ def test_filter_composition_regex_chat_and_custom_async():
         assert await combined(None, msg)
         assert await (filters.private | filters.group)(None, msg)
         matched = filters.regex(r"order (\d+)")
-        assert await matched(None, msg) and msg.matches[0].group(1) == "42"
+        assert await matched(None, msg) and getattr(msg, "matches")[0].group(1) == "42"  # noqa: B009
         assert await filters.chat("g1")(None, msg) and not await filters.chat("g2")(None, msg)
         assert await filters.user("u1")(None, msg)
 
@@ -74,7 +79,7 @@ def test_filter_composition_regex_chat_and_custom_async():
 def test_dispatcher_groups_and_propagation_control():
     async def scenario():
         seen = []
-        dispatcher = Dispatcher(client=None)
+        dispatcher = Dispatcher(client=cast(Any, None))
 
         async def first(client, update):
             seen.append("first")
@@ -170,12 +175,23 @@ def test_bot_updates_and_inline_messages_are_routed(monkeypatch):
         async def removed(app, update):
             seen["deleted"].append(update.removed_message_id)
 
-        update = BotUpdate._parse(client, {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "1", "text": "/start", "sender_type": "User"}})
+        update = BotUpdate._parse(
+            client, {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "1", "text": "/start", "sender_type": "User"}}
+        )
         await client.dispatch_update(update)
-        button = BotUpdate._parse(client, {"type": "NewMessage", "chat_id": "b0chat", "new_message": {"message_id": "2", "text": "menu", "aux_data": {"button_id": "btn-1"}}})
+        button = BotUpdate._parse(
+            client,
+            {
+                "type": "NewMessage",
+                "chat_id": "b0chat",
+                "new_message": {"message_id": "2", "text": "menu", "aux_data": {"button_id": "btn-1"}},
+            },
+        )
         await client.dispatch_update(button)
         await client.dispatch_update(BotUpdate._parse(client, {"type": "RemovedMessage", "chat_id": "b0chat", "removed_message_id": "9"}))
-        await client.dispatch_update(InlineMessage._parse(client, {"message_id": "3", "chat_id": "b0chat", "aux_data": {"button_id": "btn-1"}}))
+        await client.dispatch_update(
+            InlineMessage._parse(client, {"message_id": "3", "chat_id": "b0chat", "aux_data": {"button_id": "btn-1"}})
+        )
         assert seen == {"message": ["b0chat"], "callback": ["btn-1", "btn-1"], "inline": ["3"], "deleted": ["9"]}
 
     run(scenario())

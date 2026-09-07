@@ -64,14 +64,14 @@ class RawUpdateHandler(Handler):
 
 
 __all__ = [
-    "MessageHandler",
-    "EditedMessageHandler",
-    "DeletedMessageHandler",
-    "ChatUpdateHandler",
     "ActivityHandler",
-    "NotificationHandler",
-    "DraftUpdateHandler",
-    "InlineMessageHandler",
     "CallbackQueryHandler",
+    "ChatUpdateHandler",
+    "DeletedMessageHandler",
+    "DraftUpdateHandler",
+    "EditedMessageHandler",
+    "InlineMessageHandler",
+    "MessageHandler",
+    "NotificationHandler",
     "RawUpdateHandler",
 ]

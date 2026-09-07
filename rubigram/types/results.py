@@ -13,4 +13,4 @@ warnings.warn(
 )
 
 globals().update({name: getattr(_types, name) for name in _types.__all__})
-__all__ = list(_types.__all__)
+__all__ = list(_types.__all__)  # pyright: ignore[reportUnsupportedDunderAll]

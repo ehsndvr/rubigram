@@ -5,16 +5,14 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 
+from rubigram.client.base import BaseClient
 from rubigram.crypto import export_public_key_for_login, generate_rsa_key_pair
 from rubigram.errors import AuthError, CodeIsExpired, CodeIsInvalid, CodeIsUsed, InvalidInput, LoginRequired, RpcError, RubigramError
 from rubigram.raw.methods import GetTime, Logout, RegisterDevice, SendCode, SignIn, SignUp, UnregisterDevice
 from rubigram.types import Authorization, Empty, SentCode, TimeResult
 from rubigram.utils import device_hash_from_user_agent, generate_device_hash, normalize_phone_number
-
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
 
 log = logging.getLogger(__name__)
 CodeCallback = Callable[..., Union[str, Awaitable[str]]]
@@ -26,28 +24,30 @@ async def _prompt(text: str) -> str:
     return await asyncio.to_thread(input, text)
 
 
-class Auth:
-    async def send_code(self: "Client", phone_number: str, *, send_type: str = "SMS", pass_key: Optional[str] = None) -> SentCode:
+class Auth(BaseClient):
+    async def send_code(self, phone_number: str, *, send_type: str = "SMS", pass_key: Optional[str] = None) -> SentCode:
         """Ask Rubika to send a login code (``sendCode``). [HTTP]"""
         self._require_user_session("send_code")
         return await self.invoke(SendCode(phone_number=normalize_phone_number(phone_number), send_type=send_type, pass_key=pass_key))
 
-    async def sign_in(self: "Client", phone_number: str, phone_code_hash: str, phone_code: str) -> Authorization:
+    async def sign_in(self, phone_number: str, phone_code_hash: str, phone_code: str) -> Authorization:
         """Confirm the code (``signIn``); on success the session ``auth`` is stored. [HTTP]"""
         self._require_user_session("sign_in")
-        authorization = await self.invoke(SignIn(phone_number=normalize_phone_number(phone_number), phone_code_hash=phone_code_hash, phone_code=str(phone_code).strip()))
+        authorization = await self.invoke(
+            SignIn(phone_number=normalize_phone_number(phone_number), phone_code_hash=phone_code_hash, phone_code=str(phone_code).strip())
+        )
         error = _INNER_STATUS_ERRORS.get(str(authorization.status or "OK"))
         if error is not None:
             raise error(str(authorization.status), None, authorization.to_dict(), method="signIn")
         return authorization
 
-    async def sign_up(self: "Client", first_name: str, last_name: str = "") -> Authorization:
+    async def sign_up(self, first_name: str, last_name: str = "") -> Authorization:
         """Register a new account (``signUp``); unverified against the current server. [HTTP]"""
         self._require_user_session("sign_up")
         return await self.invoke(SignUp(first_name=first_name, last_name=last_name))
 
     async def login(
-        self: "Client",
+        self,
         phone_number: Optional[str] = None,
         *,
         code: Optional[str] = None,
@@ -86,7 +86,11 @@ class Auth:
             raise AuthError(f"sendCode did not return phone_code_hash (status {sent.status})")
         last_error: Optional[RpcError] = None
         for attempt in range(max(1, max_attempts)):
-            value = code if attempt == 0 and code else (self.phone_code if attempt == 0 and self.phone_code else await self._resolve_code(sent, callback))
+            value = (
+                code
+                if attempt == 0 and code
+                else (self.phone_code if attempt == 0 and self.phone_code else await self._resolve_code(sent, callback))
+            )
             try:
                 authorization = await self.sign_in(self.phone_number, sent.phone_code_hash, str(value))
             except (CodeIsInvalid, CodeIsExpired, InvalidInput) as exc:
@@ -106,7 +110,7 @@ class Auth:
         assert last_error is not None
         raise last_error
 
-    async def _resolve_code(self: "Client", sent: SentCode, callback: Optional[CodeCallback]) -> str:
+    async def _resolve_code(self, sent: SentCode, callback: Optional[CodeCallback]) -> str:
         if callback is None:
             if not self.interactive:
                 raise LoginRequired("A verification code is required; pass code= or code_callback=")
@@ -116,14 +120,14 @@ class Auth:
             result = await result
         return str(result).strip()
 
-    async def authorize(self: "Client") -> Any:
+    async def authorize(self) -> Any:
         """rubigram 0.1 name of :meth:`login` (bots just persist their token)."""
         if self.is_bot:
             await self.storage.set_bot_token(self.token)
             return {"bot_token": self.token}
         return await self.login()
 
-    async def register_device(self: "Client", force: bool = False) -> Empty:
+    async def register_device(self, force: bool = False) -> Empty:
         """``registerDevice`` with the web-client payload; skipped when already registered for this app version. [HTTP]"""
         self._require_user_session("register_device")
         if not self.enable_register_device:
@@ -150,14 +154,14 @@ class Auth:
             await self.storage.set_registered_device_version(self.app_version)
             return method.parse_response(self, data)
 
-    async def unregister_device(self: "Client", device: Optional[dict[str, Any]] = None) -> Empty:
+    async def unregister_device(self, device: Optional[dict[str, Any]] = None) -> Empty:
         """``unregisterDevice`` (sent unencrypted like the web client). [HTTP]"""
         self._require_user_session("unregister_device")
         result = await self.invoke(UnregisterDevice(device=device))
         await self.storage.set_registered_device(False)
         return result
 
-    async def logout(self: "Client") -> Empty:
+    async def logout(self) -> Empty:
         """``logout`` and forget the stored auth. [HTTP]"""
         self._require_user_session("logout")
         try:
@@ -169,17 +173,17 @@ class Auth:
                 self._socket = None
         return result
 
-    async def get_time(self: "Client") -> TimeResult:
+    async def get_time(self) -> TimeResult:
         """Server time (``getTime``). [HTTP]"""
         return await self.invoke(GetTime())
 
     # -- internals ---------------------------------------------------------
 
-    async def _finalize_login(self: "Client", encrypted_auth: str, data: dict[str, Any]) -> None:
+    async def _finalize_login(self, encrypted_auth: str, data: dict[str, Any]) -> None:
         assert self._codec is not None
         try:
             auth = self._codec.unwrap_server_auth(encrypted_auth)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise AuthError(f"Failed to unwrap the server auth: {exc}") from exc
         await self.storage.set_auth(auth)
         await self.storage.set_tmp_session(None)
@@ -203,7 +207,7 @@ class Auth:
                 log.warning("Socket connection failed right after login: %s", exc)
         await self._ensure_listener()
 
-    async def _ensure_login_key_pair(self: "Client") -> None:
+    async def _ensure_login_key_pair(self) -> None:
         public_key = await self.storage.public_key()
         private_key_pem = await self.storage.private_key_pem()
         if private_key_pem:
@@ -219,14 +223,14 @@ class Auth:
         await self.storage.set_public_key(public_key)
         await self.storage.set_private_key_pem(private_key_pem)
 
-    async def _ensure_registered_device(self: "Client", force: bool = False) -> None:
+    async def _ensure_registered_device(self, force: bool = False) -> None:
         if not self.enable_register_device or not await self.storage.auth():
             return
         if not force and await self.storage.registered_device() and await self.storage.registered_device_version() == self.app_version:
             return
         await self.register_device(force=True)
 
-    async def _ensure_device_hash(self: "Client") -> str:
+    async def _ensure_device_hash(self) -> str:
         stored = await self.storage.device_hash()
         device_hash = self.device_hash or stored
         if not device_hash:

@@ -48,7 +48,16 @@ class RubinoPostMedia(Object):
         if self.snapshot is None:
             self.snapshot = UrlFile.from_url(client, self.full_snapshot_url, file_name=_rubino_default_name(data, kind="snapshot"))
 
-    async def download(self, path: Any = None, *, in_memory: bool = False, file_name: Optional[str] = None, progress: Any = None, progress_args: tuple[Any, ...] = (), kind: str = "file") -> Any:
+    async def download(
+        self,
+        path: Any = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+        kind: str = "file",
+    ) -> Any:
         target = {"file": self.file, "thumbnail": self.thumbnail, "snapshot": self.snapshot}.get(kind)
         if target is None:
             raise RuntimeError(f"This Rubino media does not contain downloadable {kind} data")
@@ -153,4 +162,4 @@ class BaseInfo(Object):
     timestamp: Optional[str] = None
 
 
-__all__ = ["RubinoPostMedia", "RubinoPost", "RubinoPostsResult", "RubinoStory", "RubinoStoriesResult", "BaseInfo"]
+__all__ = ["BaseInfo", "RubinoPost", "RubinoPostMedia", "RubinoPostsResult", "RubinoStoriesResult", "RubinoStory"]

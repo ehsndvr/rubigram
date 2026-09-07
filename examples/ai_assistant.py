@@ -90,7 +90,7 @@ async def handle_text(client: Client, message: Message):
         return
     try:
         answer = await ask_ai(message.object_guid or "default", text)
-    except Exception as exc:  # noqa: BLE001 - report every failure to the chat
+    except Exception as exc:
         answer = f"AI request failed: {exc}"
     await message.reply(answer, parse_mode="markdown")
 

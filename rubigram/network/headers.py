@@ -15,9 +15,7 @@ WEB_ORIGIN = "https://web.rubika.ir"
 WEB_REFERER = "https://web.rubika.ir/"
 CHROME_MAJOR = "145"
 CHROME_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    f"Chrome/{CHROME_MAJOR}.0.0.0 Safari/537.36"
+    f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME_MAJOR}.0.0.0 Safari/537.36"
 )
 
 BASE_BROWSER_HEADERS: Dict[str, str] = {
@@ -116,15 +114,15 @@ def build_download_headers(user_agent: Optional[str] = None) -> Dict[str, str]:
 
 
 __all__ = [
+    "BASE_BROWSER_HEADERS",
+    "CHROME_USER_AGENT",
     "WEB_ORIGIN",
     "WEB_REFERER",
-    "CHROME_USER_AGENT",
-    "BASE_BROWSER_HEADERS",
     "build_client_hints",
-    "build_rpc_headers",
-    "build_json_headers",
     "build_discovery_headers",
-    "build_websocket_headers",
-    "build_upload_headers",
     "build_download_headers",
+    "build_json_headers",
+    "build_rpc_headers",
+    "build_upload_headers",
+    "build_websocket_headers",
 ]

@@ -51,7 +51,7 @@ class RetryPolicy:
             return 0.0
         return float(self.delays[min(retry_index, len(self.delays) - 1)])
 
-    def with_overrides(self, *, retries: Optional[int] = None, timeout: Optional[float] = None) -> "RetryPolicy":
+    def with_overrides(self, *, retries: Optional[int] = None, timeout: Optional[float] = None) -> RetryPolicy:
         """Return a copy with a different retry count and/or timeout."""
         policy = self
         if retries is not None:
@@ -86,7 +86,7 @@ async def run_with_retries(
             return await attempt(index)
         except asyncio.CancelledError:
             raise
-        except BaseException as exc:  # noqa: BLE001 - the predicate decides
+        except BaseException as exc:
             last_error = exc
             if index >= policy.retries or not retryable(exc):
                 raise
@@ -102,4 +102,4 @@ async def run_with_retries(
     raise last_error
 
 
-__all__ = ["RetryPolicy", "DEFAULT_RETRY_POLICY", "NO_RETRY", "WEB_RETRY_DELAYS", "run_with_retries"]
+__all__ = ["DEFAULT_RETRY_POLICY", "NO_RETRY", "WEB_RETRY_DELAYS", "RetryPolicy", "run_with_retries"]

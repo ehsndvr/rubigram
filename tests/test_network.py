@@ -1,6 +1,6 @@
 import asyncio
 import json
-from pathlib import Path
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -46,7 +46,7 @@ def test_transport_coerce_accepts_strings_and_members():
     assert Transport.WS == "ws"
     for bad in ("grpc", "", None, 3):
         with pytest.raises(ValueError):
-            Transport.coerce(bad)
+            Transport.coerce(cast(Any, bad))
 
 
 def test_retry_policy_matches_web_client_ladder_and_overrides():
@@ -113,7 +113,9 @@ def test_http_transport_sends_text_plain_body_and_rotates_on_timeout():
             raise httpx.ReadTimeout("slow", request=request)
         return httpx.Response(200, json={"status": "OK", "status_det": "OK"})
 
-    transport = HttpTransport(["https://messengerg2c1.iranlms.ir", "https://messengerg2c2.iranlms.ir"], retry_policy=no_sleep(RetryPolicy()))
+    transport = HttpTransport(
+        ["https://messengerg2c1.iranlms.ir", "https://messengerg2c2.iranlms.ir"], retry_policy=no_sleep(RetryPolicy())
+    )
     transport.use_client(_mock_client(handler))
     result = run(transport.send({"api_version": "6", "auth": "x", "data_enc": "abc", "sign": "sig"}))
 
@@ -156,7 +158,9 @@ def test_http_transport_raises_request_timeout_after_ladder_and_refreshes_urls_o
         refreshes.append(1)
         return ["https://fresh.iranlms.ir"]
 
-    transport = HttpTransport(["https://a.iranlms.ir", "https://b.iranlms.ir"], retry_policy=no_sleep(RetryPolicy(max_retries=3)), refresh_urls=refresh)
+    transport = HttpTransport(
+        ["https://a.iranlms.ir", "https://b.iranlms.ir"], retry_policy=no_sleep(RetryPolicy(max_retries=3)), refresh_urls=refresh
+    )
     transport.use_client(_mock_client(handler))
     with pytest.raises(RequestTimeout):
         run(transport.send({"x": 1}))
@@ -233,7 +237,15 @@ def test_dc_discovery_fetches_dcs_with_plain_json_and_api_version_4():
 
 
 def test_dc_discovery_suggested_urls_for_supports_base_info_payload():
-    payload = {"data": {"suggested_urls": {"suggested_services": "https://services2.iranlms.ir/", "suggested_rubino": "https://rubino2.iranlms.ir", "suggested_payment": "https://mmegapal.iranlms.ir"}}}
+    payload = {
+        "data": {
+            "suggested_urls": {
+                "suggested_services": "https://services2.iranlms.ir/",
+                "suggested_rubino": "https://rubino2.iranlms.ir",
+                "suggested_payment": "https://mmegapal.iranlms.ir",
+            }
+        }
+    }
     assert DcDiscovery.suggested_urls_for(payload, DcType.API) == ["https://services2.iranlms.ir"]
     assert DcDiscovery.suggested_urls_for(payload, DcType.RUBINO) == ["https://rubino2.iranlms.ir"]
     assert DcDiscovery.suggested_urls_for(payload, DcType.WALLET) == ["https://mmegapal.iranlms.ir"]
@@ -272,7 +284,9 @@ def test_headers_match_chrome_profile_and_client_hints():
     assert headers["referer"] == "https://web.rubika.ir/"
     assert headers["sec-ch-ua-platform"] == '"Windows"'
     assert 'v="145"' in headers["sec-ch-ua"]
-    mac = build_client_hints("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+    mac = build_client_hints(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+    )
     assert mac["sec-ch-ua-platform"] == '"macOS"' and 'v="140"' in mac["sec-ch-ua"]
     assert build_websocket_headers()["sec-ch-ua-mobile"] == "?0"
 
@@ -359,7 +373,9 @@ def test_socket_transport_handshake_headers_and_pong_filtering(monkeypatch):
 
 def test_socket_transport_pings_after_idle_and_reconnects_on_silence(monkeypatch):
     async def scenario():
-        module = StubWebSocketsModule([[HANDSHAKE_OK, "PONG"], [HANDSHAKE_OK, json.dumps({"type": "messenger", "data_enc": "after-reconnect"})]])
+        module = StubWebSocketsModule(
+            [[HANDSHAKE_OK, "PONG"], [HANDSHAKE_OK, json.dumps({"type": "messenger", "data_enc": "after-reconnect"})]]
+        )
         monkeypatch.setattr(SocketTransport, "_load_websockets_module", staticmethod(lambda: module))
         transport = SocketTransport(
             ["wss://nsocket10.iranlms.ir:80/", "wss://nsocket11.iranlms.ir:80/"],
@@ -440,7 +456,10 @@ def test_upload_transport_streams_parts_with_headers_and_progress(tmp_path):
     progress = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        parts.append({k: request.headers[k] for k in ("auth", "file-id", "access-hash-send", "part-number", "total-part", "chunk-size")} | {"body": request.content})
+        parts.append(
+            {k: request.headers[k] for k in ("auth", "file-id", "access-hash-send", "part-number", "total-part", "chunk-size")}
+            | {"body": request.content}
+        )
         if request.headers["part-number"] == "1":
             return httpx.Response(200, json={"status": "OK", "status_det": "OK", "data": {}})
         return httpx.Response(200, json={"status": "OK", "status_det": "OK", "data": {"access_hash_rec": "rec-1"}})
@@ -462,7 +481,10 @@ def test_upload_transport_streams_parts_with_headers_and_progress(tmp_path):
 
 
 def test_upload_transport_retries_part_on_5xx():
-    responses = [httpx.Response(500, text="oops"), httpx.Response(200, json={"status": "OK", "status_det": "OK", "data": {"access_hash_rec": "rec"}})]
+    responses = [
+        httpx.Response(500, text="oops"),
+        httpx.Response(200, json={"status": "OK", "status_det": "OK", "data": {"access_hash_rec": "rec"}}),
+    ]
 
     async def handler(request: httpx.Request) -> httpx.Response:
         return responses.pop(0)
@@ -481,7 +503,9 @@ def test_download_transport_uses_storage_url_ranges_and_total_length(tmp_path):
     async def handler(request: httpx.Request) -> httpx.Response:
         start = int(request.headers["start-index"])
         end = int(request.headers["last-index"])
-        requests.append((str(request.url), request.headers["auth"], request.headers["file-id"], request.headers["access-hash-rec"], start, end))
+        requests.append(
+            (str(request.url), request.headers["auth"], request.headers["file-id"], request.headers["access-hash-rec"], start, end)
+        )
         return httpx.Response(200, content=content[start : end + 1], headers={"total_length": str(len(content))})
 
     transport = DownloadTransport(chunk_size=6)

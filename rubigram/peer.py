@@ -18,7 +18,7 @@ class Peer:
         return self.id
 
     @classmethod
-    def from_value(cls, value: Any) -> "Peer":
+    def from_value(cls, value: Any) -> Peer:
         if isinstance(value, cls):
             return value
         if isinstance(value, str):

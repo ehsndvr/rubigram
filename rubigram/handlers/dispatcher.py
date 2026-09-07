@@ -27,7 +27,7 @@ class Dispatcher:
     Callback exceptions are logged and never stop the dispatcher.
     """
 
-    def __init__(self, client: "Client"):
+    def __init__(self, client: Client):
         self.client = client
         self.groups: Dict[int, List[Handler]] = defaultdict(list)
 
@@ -65,7 +65,7 @@ class Dispatcher:
                     continue
                 try:
                     matched = await handler.check(self.client, update)
-                except Exception:  # noqa: BLE001 - a broken filter must not stop dispatch
+                except Exception:
                     log.exception("Filter of %r failed", handler)
                     continue
                 if not matched:
@@ -76,11 +76,11 @@ class Dispatcher:
                     continue
                 except StopPropagation:
                     return
-                except Exception:  # noqa: BLE001
+                except Exception:
                     log.exception("Handler %r failed", handler)
                 break
 
-    async def dispatch_updates(self, updates: "Updates") -> None:
+    async def dispatch_updates(self, updates: Updates) -> None:
         """Fan out one decrypted socket frame."""
         await self.dispatch("raw", updates)
         for message_update in updates.message_updates:
@@ -105,7 +105,7 @@ class Dispatcher:
         for draft in updates.draft_message_updates:
             await self.dispatch("draft_update", draft)
 
-    async def dispatch_bot_update(self, update: "Update") -> None:
+    async def dispatch_bot_update(self, update: Update) -> None:
         """Fan out one Bot API update (polling or webhook)."""
         await self.dispatch("raw", update)
         kind = str(update.type or "")
@@ -119,7 +119,7 @@ class Dispatcher:
         elif kind == "RemovedMessage":
             await self.dispatch("deleted_message", update)
 
-    async def dispatch_inline_message(self, inline_message: "InlineMessage") -> None:
+    async def dispatch_inline_message(self, inline_message: InlineMessage) -> None:
         await self.dispatch("inline_message", inline_message)
         if getattr(inline_message, "button_id", None):
             await self.dispatch("callback_query", inline_message)

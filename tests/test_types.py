@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+# (tests assert on parsed payloads; a missing field is a test failure)
 import asyncio
 import json
 import pickle
@@ -92,7 +94,12 @@ def test_sticker_message_parses_file_and_downloads_through_bound_client():
         "message_id": "5",
         "type": "Sticker",
         "object_guid": "u0EXAMPLE00000000000000000000001",
-        "sticker": {"sticker_id": "s1", "emoji_character": "😀", "w_h_ratio": "1.0", "file": {"file_id": "f1", "dc_id": "3", "access_hash_rec": "ACCESS", "mime": "png", "file_name": "s.png"}},
+        "sticker": {
+            "sticker_id": "s1",
+            "emoji_character": "😀",
+            "w_h_ratio": "1.0",
+            "file": {"file_id": "f1", "dc_id": "3", "access_hash_rec": "ACCESS", "mime": "png", "file_name": "s.png"},
+        },
     }
     message = Message._parse(client, data)
     assert isinstance(message.sticker.file, StickerFile)
@@ -163,7 +170,15 @@ def test_rubino_post_result_names_files_from_post_id():
     result = RubinoPostsResult._parse(
         client,
         {
-            "posts": [{"id": "p1", "profile_id": "pp1", "file_type": "Video", "full_file_url": "https://rubino2.iranlms.ir/video/file-1", "full_thumbnail_url": "https://rubino2.iranlms.ir/picture/thumb-1"}],
+            "posts": [
+                {
+                    "id": "p1",
+                    "profile_id": "pp1",
+                    "file_type": "Video",
+                    "full_file_url": "https://rubino2.iranlms.ir/video/file-1",
+                    "full_thumbnail_url": "https://rubino2.iranlms.ir/picture/thumb-1",
+                }
+            ],
             "liked_posts": [],
             "bookmarked_posts": [],
         },
@@ -183,7 +198,7 @@ def test_raw_object_keeps_keys_and_equality_pickle_repr():
     assert raw.get("not-an-identifier") == 3 and "not-an-identifier" in raw
     assert raw.to_dict() == {"a": 1, "nested": {"b": [1, {"c": 2}]}, "not-an-identifier": 3}
     with pytest.raises(AttributeError):
-        raw.missing
+        _ = raw.missing
     descriptor = UploadDescriptor(id="1", dc_id="2", access_hash_send="s")
     assert descriptor == UploadDescriptor(id="1", dc_id="2", access_hash_send="s")
     assert descriptor != UploadDescriptor(id="9")
@@ -193,14 +208,23 @@ def test_raw_object_keeps_keys_and_equality_pickle_repr():
 
 
 def test_bot_keypad_serialization_and_updates_bind_chat_id():
-    keypad = Keypad(rows=[KeypadRow(buttons=[Button(id="1", type="Simple", button_text="Open")])])
+    keypad = Keypad(rows=[KeypadRow(buttons=[Button(id="1", type=ButtonType.SIMPLE, button_text="Open")])])
     assert keypad.to_dict() == {"rows": [{"buttons": [{"id": "1", "type": "Simple", "button_text": "Open"}]}]}
     built = Keypad.build([Button.simple("a", "A")], resize_keyboard=True)
     assert built.to_dict()["rows"][0]["buttons"][0]["type"] == "Simple"
     assert built.rows[0].buttons[0].type is ButtonType.SIMPLE
     updates = BotUpdates._parse(
         None,
-        {"updates": [{"type": "NewMessage", "chat_id": "c0", "new_message": {"message_id": "m1", "text": "/start", "sender_type": "User", "sender_id": "u1"}}], "next_offset_id": "2"},
+        {
+            "updates": [
+                {
+                    "type": "NewMessage",
+                    "chat_id": "c0",
+                    "new_message": {"message_id": "m1", "text": "/start", "sender_type": "User", "sender_id": "u1"},
+                }
+            ],
+            "next_offset_id": "2",
+        },
     )
     update = updates.updates[0]
     assert isinstance(update, Update) and update.new_message.chat_id == "c0"

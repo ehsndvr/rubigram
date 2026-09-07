@@ -3,4 +3,4 @@
 from rubigram.network.http import HttpTransport, JsonTransport, RpcTransport
 from rubigram.network.pool import ApiUrlPool, UrlPool
 
-__all__ = ["ApiUrlPool", "UrlPool", "HttpTransport", "JsonTransport", "RpcTransport"]
+__all__ = ["ApiUrlPool", "HttpTransport", "JsonTransport", "RpcTransport", "UrlPool"]

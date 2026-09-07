@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
+from rubigram.client.base import BaseClient
 from rubigram.errors import LoginRequired, RubigramError
 from rubigram.raw.methods import GetBaseInfo, GetProfilePosts, GetProfilesStoryList, SendRubinoPost
 from rubigram.types import BaseInfo, RubinoPostsResult, RubinoStoriesResult, SentMessage
 
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
-
 log = logging.getLogger(__name__)
 
 
-class Rubino:
-    async def get_base_info(self: "Client") -> BaseInfo:
+class Rubino(BaseClient):
+    async def get_base_info(self) -> BaseInfo:
         """``getBaseInfo`` on the services base; stores the suggested Rubino/wallet URLs. [HTTP]"""
         self._require_user_session("get_base_info")
         if not await self.storage.auth():
@@ -28,7 +26,7 @@ class Rubino:
         await self.storage.set_suggested_urls(self.dc.suggested_urls or None)
         return result
 
-    async def _ensure_base_info(self: "Client", force: bool = False) -> Optional[dict[str, str]]:
+    async def _ensure_base_info(self, force: bool = False) -> Optional[dict[str, str]]:
         if not force and self.dc.suggested_urls:
             return self.dc.suggested_urls
         if not await self.storage.auth():
@@ -36,14 +34,18 @@ class Rubino:
         await self.get_base_info()
         return self.dc.suggested_urls or None
 
-    async def get_rubino_post(self: "Client", post_id: Any = None, post_profile_id: Optional[str] = None, *, rubino_post_data: Any = None, track_id: Optional[str] = None) -> RubinoPostsResult:
+    async def get_rubino_post(
+        self, post_id: Any = None, post_profile_id: Optional[str] = None, *, rubino_post_data: Any = None, track_id: Optional[str] = None
+    ) -> RubinoPostsResult:
         """Fetch one Rubino post (``getProfilePosts`` on the Rubino DC).
 
         Pass ``post_id`` and ``post_profile_id`` or ``rubino_post_data=message.rubino_post_data``.
         [HTTP]
         """
         self._require_user_session("get_rubino_post")
-        resolved_post_id, resolved_profile_id = self._resolve_rubino_post_input(post_id=post_id, post_profile_id=post_profile_id, rubino_post_data=rubino_post_data)
+        resolved_post_id, resolved_profile_id = self._resolve_rubino_post_input(
+            post_id=post_id, post_profile_id=post_profile_id, rubino_post_data=rubino_post_data
+        )
         if not await self.storage.auth():
             raise LoginRequired("This method requires an authenticated session")
         if not self.dc.suggested_urls:
@@ -51,12 +53,16 @@ class Rubino:
                 await self._ensure_base_info()
             except RubigramError as exc:
                 log.warning("Base info lookup failed, using the default Rubino DC: %s", exc)
-        result = await self.invoke(GetProfilePosts(target_profile_id=resolved_profile_id, max_id=resolved_post_id, min_id=resolved_post_id, equal=True, limit=1, sort="FromMax"))
+        result = await self.invoke(
+            GetProfilePosts(
+                target_profile_id=resolved_profile_id, max_id=resolved_post_id, min_id=resolved_post_id, equal=True, limit=1, sort="FromMax"
+            )
+        )
         if track_id is not None:
             result.track_id = track_id
         return result
 
-    async def get_rubino_stories(self: "Client", story_id: str, story_profile_id: str) -> RubinoStoriesResult:
+    async def get_rubino_stories(self, story_id: str, story_profile_id: str) -> RubinoStoriesResult:
         """Fetch a story (``getProfilesStoryList`` on the Rubino DC). [HTTP]"""
         self._require_user_session("get_rubino_stories")
         if not self.dc.suggested_urls:
@@ -66,9 +72,17 @@ class Rubino:
                 log.warning("Base info lookup failed, using the default Rubino DC: %s", exc)
         return await self.invoke(GetProfilesStoryList(profile_story_ids=[{"story_ids": [story_id], "profile_id": story_profile_id}]))
 
-    async def send_rubino_post(self: "Client", object_guid: Any, post_id: str, post_profile_id: str, *, text: Optional[str] = None) -> SentMessage:
+    async def send_rubino_post(self, object_guid: Any, post_id: str, post_profile_id: str, *, text: Optional[str] = None) -> SentMessage:
         """Share a Rubino post into a chat (``sendRubinoPost``). [HTTP]"""
-        return await self.invoke(SendRubinoPost(object_guid=self._resolve_object_guid(object_guid), rnd=self._new_rnd(), post_id=post_id, post_profile_id=post_profile_id, text=text))
+        return await self.invoke(
+            SendRubinoPost(
+                object_guid=self._resolve_object_guid(object_guid),
+                rnd=self._new_rnd(),
+                post_id=post_id,
+                post_profile_id=post_profile_id,
+                text=text,
+            )
+        )
 
     @staticmethod
     def _resolve_rubino_post_input(*, post_id: Any, post_profile_id: Optional[str], rubino_post_data: Any) -> tuple[str, str]:

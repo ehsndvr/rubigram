@@ -110,7 +110,7 @@ class Button(Object):
     button_textbox: Optional[ButtonTextbox] = None
 
     @classmethod
-    def simple(cls, id: str, text: str) -> "Button":
+    def simple(cls, id: str, text: str) -> Button:
         return cls(id=id, type=ButtonType.SIMPLE, button_text=text)
 
 
@@ -134,9 +134,11 @@ class Keypad(Object):
         self.rows = [KeypadRow._parse(client, row) if isinstance(row, dict) else row for row in (self.rows or [])]
 
     @classmethod
-    def build(cls, *rows: list[Button], resize_keyboard: Optional[bool] = None, one_time_keyboard: Optional[bool] = None) -> "Keypad":
+    def build(cls, *rows: list[Button], resize_keyboard: Optional[bool] = None, one_time_keyboard: Optional[bool] = None) -> Keypad:
         """``Keypad.build([Button.simple("1", "A")], [Button.simple("2", "B")])``."""
-        return cls(rows=[KeypadRow(buttons=list(row)) for row in rows], resize_keyboard=resize_keyboard, one_time_keyboard=one_time_keyboard)
+        return cls(
+            rows=[KeypadRow(buttons=list(row)) for row in rows], resize_keyboard=resize_keyboard, one_time_keyboard=one_time_keyboard
+        )
 
 
 @model
@@ -146,17 +148,17 @@ class MessageKeypadUpdate(Object):
 
 
 __all__ = [
-    "Location",
-    "ButtonSelectionItem",
-    "ButtonSelection",
-    "ButtonCalendar",
-    "ButtonNumberPicker",
-    "ButtonStringPicker",
-    "ButtonTextbox",
-    "ButtonLocation",
     "AuxData",
     "Button",
-    "KeypadRow",
+    "ButtonCalendar",
+    "ButtonLocation",
+    "ButtonNumberPicker",
+    "ButtonSelection",
+    "ButtonSelectionItem",
+    "ButtonStringPicker",
+    "ButtonTextbox",
     "Keypad",
+    "KeypadRow",
+    "Location",
     "MessageKeypadUpdate",
 ]

@@ -46,7 +46,7 @@ class SocketTransport:
 
     def __init__(
         self,
-        urls: "Sequence[str] | UrlPool",
+        urls: Sequence[str] | UrlPool,
         timeout: float = DEFAULT_TIMEOUT,
         heartbeat_interval: float = DEFAULT_PING_DELAY,
         *,
@@ -191,7 +191,7 @@ class SocketTransport:
                 raise
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - try the next DC
+            except Exception as exc:
                 last_error = exc
                 log.warning("Socket connect to %s failed: %s", url, exc)
                 self._pool.force_rotate()
@@ -255,11 +255,11 @@ class SocketTransport:
                         result = self._on_frame(frame)
                         if inspect.isawaitable(result):
                             await result
-                    except Exception:  # noqa: BLE001 - a bad callback must not kill the reader
+                    except Exception:
                         log.exception("Socket frame callback failed")
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if not self._closed:
                 log.warning("Socket reader stopped for %s: %s", self._connected_url, exc)
                 self._schedule_reconnect("reader error")
@@ -284,7 +284,7 @@ class SocketTransport:
                 await asyncio.sleep(min(due - now, 1.0))
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if not self._closed:
                 log.warning("Socket keepalive failed for %s: %s", self._connected_url, exc)
                 self._schedule_reconnect("keepalive error")
@@ -308,7 +308,11 @@ class SocketTransport:
         self._connected_event.clear()
         while not self._closed and auth:
             self._failures += 1
-            delay = min(self._retry_delay * (2 ** max(0, self._failures - 2)), self.MAX_RETRY_DELAY) if self._failures > 1 else self._retry_delay
+            delay = (
+                min(self._retry_delay * (2 ** max(0, self._failures - 2)), self.MAX_RETRY_DELAY)
+                if self._failures > 1
+                else self._retry_delay
+            )
             log.info("Socket reconnect (%s) in %.0fs, attempt %d", reason, delay, self._failures)
             await asyncio.sleep(delay)
             if self._closed:
@@ -318,7 +322,7 @@ class SocketTransport:
                 await self._connect_any()
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("Socket reconnect attempt %d failed: %s", self._failures, exc)
                 continue
             self._failures = 0
@@ -392,4 +396,4 @@ class SocketTransport:
         self._mark_dropped()
 
 
-__all__ = ["SocketTransport", "FrameCallback"]
+__all__ = ["FrameCallback", "SocketTransport"]

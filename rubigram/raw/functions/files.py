@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 _SHORT_MIMES = {"ogg", "mp4", "jpg", "jpeg", "png", "zip", "mp3", "gif", "webp", "pdf", "apk"}
 
 
-def guess_upload_mime(path: "str | Path") -> str:
+def guess_upload_mime(path: str | Path) -> str:
     """The ``mime`` value Rubika expects in ``requestSendFile``: the file extension.
 
     The web client sends the extension (``getExt``), not a MIME type; a real
@@ -72,4 +72,4 @@ def build_file_inline(
     return block
 
 
-__all__ = ["guess_upload_mime", "build_file_inline"]
+__all__ = ["build_file_inline", "guess_upload_mime"]

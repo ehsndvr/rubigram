@@ -99,7 +99,8 @@ def test_too_requests_parses_retry_after_from_server_text():
     assert error.wait_time == 30.0
     assert parse_retry_after("try again in 2 minutes") == 120.0
     assert parse_retry_after("no number here") is None
-    assert map_rpc_error("ERROR_GENERIC", "TOO_REQUESTS", {}).retry_after is None
+    flood = map_rpc_error("ERROR_GENERIC", "TOO_REQUESTS", {})
+    assert isinstance(flood, TooRequests) and flood.retry_after is None
 
 
 def test_legacy_status_only_payloads_still_map():

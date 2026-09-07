@@ -179,4 +179,4 @@ class UploadTransport:
             self._client = None
 
 
-__all__ = ["UploadTransport", "report_progress", "ProgressCallback"]
+__all__ = ["ProgressCallback", "UploadTransport", "report_progress"]

@@ -6,7 +6,15 @@ import sqlite3
 import pytest
 
 from rubigram.errors import StorageError
-from rubigram.storage import FIELDS, FileStorage, MemoryStorage, SqliteStorage, dump_session_string, load_session_string, session_string_version
+from rubigram.storage import (
+    FIELDS,
+    FileStorage,
+    MemoryStorage,
+    SqliteStorage,
+    dump_session_string,
+    load_session_string,
+    session_string_version,
+)
 from rubigram.storage.sqlite import SCHEMA_VERSION
 
 
@@ -154,6 +162,7 @@ def test_sqlite_storage_migrates_the_rubigram_0_1_schema(tmp_path):
         await storage.set_bot_token("token")
         await storage.set_chat_state("c0EXAMPLE00000000000000000000003", 7)
         assert storage.schema_version() == SCHEMA_VERSION
+        assert storage.conn is not None
         columns = {row[1] for row in storage.conn.execute("PRAGMA table_info(session)").fetchall()}
         assert {field.column for field in FIELDS} <= columns
         await storage.close()

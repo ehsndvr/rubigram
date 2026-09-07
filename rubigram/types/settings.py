@@ -182,19 +182,19 @@ class ChangePhoneRequest(Object):
 
 
 __all__ = [
+    "ChangePhoneRequest",
+    "Folder",
+    "FolderResult",
+    "FoldersResult",
+    "MySessions",
+    "NotificationSetting",
     "PrivacySetting",
     "PrivacySettingResult",
-    "NotificationSetting",
-    "UserSetting",
-    "UserSettingResult",
+    "SessionInfo",
     "TwoStepStatus",
     "TwoStepStatusResult",
-    "SessionInfo",
-    "MySessions",
     "UnconfirmedSession",
     "UnconfirmedSessions",
-    "Folder",
-    "FoldersResult",
-    "FolderResult",
-    "ChangePhoneRequest",
+    "UserSetting",
+    "UserSettingResult",
 ]

@@ -105,13 +105,13 @@ class JoinedChannel(Object):
 
 
 __all__ = [
+    "AddChannelMembersResult",
+    "AddChannelResult",
+    "BanChannelMemberResult",
     "Channel",
     "ChannelInfo",
-    "AddChannelResult",
-    "AddChannelMembersResult",
-    "EditChannelInfoResult",
-    "BanChannelMemberResult",
     "ChannelLink",
     "ChannelPreview",
+    "EditChannelInfoResult",
     "JoinedChannel",
 ]

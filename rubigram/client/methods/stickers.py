@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing import Any, Optional, Sequence
 
+from rubigram.client.base import BaseClient
 from rubigram.raw.functions import build_updated_parameters
 from rubigram.raw.methods import (
     ActionOnStickerSet,
@@ -15,9 +16,9 @@ from rubigram.raw.methods import (
     GetMyArchivedStickerSets,
     GetMyGifSet,
     GetMyStickerSets,
-    GetStickerSetByID,
     GetStickersByEmoji,
     GetStickersBySetIDs,
+    GetStickerSetByID,
     GetStickerSetting,
     GetSuggestedFolders,
     GetTrendStickerSets,
@@ -26,60 +27,68 @@ from rubigram.raw.methods import (
 )
 from rubigram.types import Empty, FolderResult, FoldersResult, GifSet, RawObject, StickerSetResult, StickerSets, StickerSetting
 
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
 
-
-class Stickers:
-    async def get_my_sticker_sets(self: "Client") -> StickerSets:
+class Stickers(BaseClient):
+    async def get_my_sticker_sets(self) -> StickerSets:
         """Installed sticker sets (``getMyStickerSets``). [HTTP]"""
         return await self.invoke(GetMyStickerSets())
 
-    async def get_sticker_set_by_id(self: "Client", sticker_set_id: str) -> StickerSetResult:
+    async def get_sticker_set_by_id(self, sticker_set_id: str) -> StickerSetResult:
+        """One sticker set with its stickers (``getStickerSetByID``). [HTTP]"""
         return await self.invoke(GetStickerSetByID(sticker_set_id=sticker_set_id))
 
-    async def get_stickers_by_set_ids(self: "Client", sticker_set_ids: Sequence[str]) -> StickerSets:
+    async def get_stickers_by_set_ids(self, sticker_set_ids: Sequence[str]) -> StickerSets:
+        """Several sticker sets at once (``getStickersBySetIDs``). [HTTP]"""
         return await self.invoke(GetStickersBySetIDs(sticker_set_ids=list(sticker_set_ids)))
 
-    async def get_stickers_by_emoji(self: "Client", emoji_character: str, *, suggest_by: str = "All") -> StickerSets:
+    async def get_stickers_by_emoji(self, emoji_character: str, *, suggest_by: str = "All") -> StickerSets:
+        """Stickers matching an emoji (``getStickersByEmoji``). [HTTP]"""
         return await self.invoke(GetStickersByEmoji(emoji_character=emoji_character, suggest_by=suggest_by))
 
-    async def search_stickers(self: "Client", search_text: str, start_id: Optional[str] = None) -> StickerSets:
+    async def search_stickers(self, search_text: str, start_id: Optional[str] = None) -> StickerSets:
+        """Search sticker sets by text (``searchStickers``). [HTTP]"""
         return await self.invoke(SearchStickers(search_text=search_text, start_id=start_id))
 
-    async def get_trend_sticker_sets(self: "Client", start_id: Optional[str] = None) -> StickerSets:
+    async def get_trend_sticker_sets(self, start_id: Optional[str] = None) -> StickerSets:
+        """Trending sticker sets (``getTrendStickerSets``). [HTTP]"""
         return await self.invoke(GetTrendStickerSets(start_id=start_id))
 
-    async def get_my_archived_sticker_sets(self: "Client", *, search_text: Optional[str] = None, start_id: Optional[str] = None) -> StickerSets:
+    async def get_my_archived_sticker_sets(self, *, search_text: Optional[str] = None, start_id: Optional[str] = None) -> StickerSets:
+        """Archived sticker sets (``getMyArchivedStickerSets``). [HTTP]"""
         return await self.invoke(GetMyArchivedStickerSets(search_text=search_text, start_id=start_id))
 
-    async def action_on_sticker_set(self: "Client", sticker_set_id: str, action: Any) -> Empty:
+    async def action_on_sticker_set(self, sticker_set_id: str, action: Any) -> Empty:
         """``actionOnStickerSet`` (``Add`` / ``Remove``). [HTTP]"""
         return await self.invoke(ActionOnStickerSet(sticker_set_id=sticker_set_id, action=str(getattr(action, "value", action))))
 
-    async def add_sticker_set(self: "Client", sticker_set_id: str) -> Empty:
+    async def add_sticker_set(self, sticker_set_id: str) -> Empty:
+        """Install a sticker set (``actionOnStickerSet`` / ``Add``). [HTTP]"""
         return await self.action_on_sticker_set(sticker_set_id, "Add")
 
-    async def remove_sticker_set(self: "Client", sticker_set_id: str) -> Empty:
+    async def remove_sticker_set(self, sticker_set_id: str) -> Empty:
+        """Uninstall a sticker set (``actionOnStickerSet`` / ``Remove``). [HTTP]"""
         return await self.action_on_sticker_set(sticker_set_id, "Remove")
 
-    async def get_sticker_setting(self: "Client") -> StickerSetting:
+    async def get_sticker_setting(self) -> StickerSetting:
+        """Sticker suggestion settings (``getStickerSetting``). [HTTP]"""
         return await self.invoke(GetStickerSetting())
 
-    async def send_sticker(self: "Client", object_guid: Any, sticker: Any, *, reply_to_message_id: Optional[str] = None) -> Any:
+    async def send_sticker(self, object_guid: Any, sticker: Any, *, reply_to_message_id: Optional[str] = None) -> Any:
         """Send a sticker object (from a sticker set or a received message). [HTTP]"""
         payload = sticker.to_dict() if hasattr(sticker, "to_dict") else dict(sticker)
         return await self.send_message(object_guid, sticker=payload, reply_to_message_id=reply_to_message_id)
 
-    async def get_my_gif_set(self: "Client") -> GifSet:
+    async def get_my_gif_set(self) -> GifSet:
+        """Saved GIFs (``getMyGifSet``). [HTTP]"""
         return await self.invoke(GetMyGifSet())
 
-    async def add_to_my_gif_set(self: "Client", object_guid: Any, message_id: Any) -> RawObject:
+    async def add_to_my_gif_set(self, object_guid: Any, message_id: Any) -> RawObject:
+        """Save a GIF message to your GIF set (``addToMyGifSet``). [HTTP]"""
         return await self.invoke(AddToMyGifSet(object_guid=self._resolve_object_guid(object_guid), message_id=str(message_id)))
 
     # -- folders ------------------------------------------------------------------
 
-    async def get_folders(self: "Client", last_state: Optional[int] = None) -> FoldersResult:
+    async def get_folders(self, last_state: Optional[int] = None) -> FoldersResult:
         """Chat folders (``getFolders``); the state is persisted. [HTTP]"""
         if last_state is None:
             last_state = await self.storage.folders_state()
@@ -88,11 +97,12 @@ class Stickers:
             await self.storage.set_folders_state(result.new_state)
         return result
 
-    async def get_suggested_folders(self: "Client") -> FoldersResult:
+    async def get_suggested_folders(self) -> FoldersResult:
+        """Folder suggestions (``getSuggestedFolders``). [HTTP]"""
         return await self.invoke(GetSuggestedFolders())
 
     async def add_folder(
-        self: "Client",
+        self,
         name: str,
         *,
         include_chat_types: Sequence[Any] | None = None,
@@ -114,7 +124,7 @@ class Stickers:
         )
 
     async def edit_folder(
-        self: "Client",
+        self,
         folder_id: str,
         *,
         name: Optional[str] = None,
@@ -123,6 +133,7 @@ class Stickers:
         include_object_guids: Sequence[Any] | None = None,
         exclude_object_guids: Sequence[Any] | None = None,
     ) -> FolderResult:
+        """Change a chat folder; only the given fields are sent (``editFolder``). [HTTP]"""
         values, names = build_updated_parameters(
             {
                 "name": name,
@@ -136,11 +147,17 @@ class Stickers:
             raise ValueError("At least one folder field must be provided")
         return await self.invoke(EditFolder(folder_id=folder_id, updated_parameters=names, **values))
 
-    async def delete_folder(self: "Client", folder_id: str) -> FolderResult:
+    async def delete_folder(self, folder_id: str) -> FolderResult:
+        """Delete a chat folder (``deleteFolder``). [HTTP]"""
         return await self.invoke(DeleteFolder(folder_id=folder_id))
 
-    async def set_pin_chat_in_folder(self: "Client", folder_id: str, object_guid: Any, action: Any = "Pin") -> RawObject:
-        return await self.invoke(SetPinChatInFolder(folder_id=folder_id, object_guid=self._resolve_object_guid(object_guid), action=str(getattr(action, "value", action))))
+    async def set_pin_chat_in_folder(self, folder_id: str, object_guid: Any, action: Any = "Pin") -> RawObject:
+        """Pin or unpin a chat inside a folder (``setPinChatInFolder``). [HTTP]"""
+        return await self.invoke(
+            SetPinChatInFolder(
+                folder_id=folder_id, object_guid=self._resolve_object_guid(object_guid), action=str(getattr(action, "value", action))
+            )
+        )
 
 
 __all__ = ["Stickers"]

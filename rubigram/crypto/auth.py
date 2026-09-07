@@ -10,12 +10,15 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
 
 
+def _load_rsa_private_key(pem_private_key: str) -> RSAPrivateKey:
+    key = serialization.load_pem_private_key(pem_private_key.encode("utf-8"), password=None, backend=default_backend())
+    if not isinstance(key, RSAPrivateKey):
+        raise TypeError("rubigram sessions need an RSA private key")
+    return key
+
+
 def rsa_sign(data: bytes, pem_private_key: str) -> str:
-    private_key = serialization.load_pem_private_key(
-        pem_private_key.encode("utf-8"),
-        password=None,
-        backend=default_backend(),
-    )
+    private_key = _load_rsa_private_key(pem_private_key)
 
     sig_bytes = private_key.sign(
         data,
@@ -55,19 +58,19 @@ def _export_public_key_pem(public_key: RSAPublicKey) -> str:
 
 
 def _export_private_key_pem(private_key: RSAPrivateKey) -> str:
-    return private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8").strip()
+    return (
+        private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        .decode("utf-8")
+        .strip()
+    )
 
 
 def export_public_key_for_login(pem_private_key: str) -> str:
-    private_key = serialization.load_pem_private_key(
-        pem_private_key.encode("utf-8"),
-        password=None,
-        backend=default_backend(),
-    )
+    private_key = _load_rsa_private_key(pem_private_key)
     return _encode_public_key_for_login(private_key.public_key())
 
 
@@ -118,11 +121,7 @@ class AuthUnwrapper:
         self._pem = pem_private_key
 
     def unwrap(self, encrypted_auth: str) -> str:
-        private_key = serialization.load_pem_private_key(
-            self._pem.encode("utf-8"),
-            password=None,
-            backend=default_backend(),
-        )
+        private_key = _load_rsa_private_key(self._pem)
         decoded = base64.b64decode(encrypted_auth)
 
         paddings = [

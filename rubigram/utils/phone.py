@@ -32,4 +32,4 @@ def looks_like_bot_token(value: str) -> bool:
     return bool(stripped) and not looks_like_phone_number(stripped)
 
 
-__all__ = ["normalize_phone_number", "looks_like_phone_number", "looks_like_bot_token"]
+__all__ = ["looks_like_bot_token", "looks_like_phone_number", "normalize_phone_number"]

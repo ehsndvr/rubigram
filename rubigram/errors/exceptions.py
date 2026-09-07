@@ -246,7 +246,16 @@ class TooRequests(RpcError):
 
     status_det_name = "TOO_REQUESTS"
 
-    def __init__(self, status: str, status_det: Optional[str] = None, raw: Optional[dict[str, Any]] = None, *, method: Optional[str] = None, client_show_message: Optional[str] = None, retry_after: Optional[float] = None):
+    def __init__(
+        self,
+        status: str,
+        status_det: Optional[str] = None,
+        raw: Optional[dict[str, Any]] = None,
+        *,
+        method: Optional[str] = None,
+        client_show_message: Optional[str] = None,
+        retry_after: Optional[float] = None,
+    ):
         super().__init__(status, status_det, raw, method=method, client_show_message=client_show_message)
         self.retry_after = retry_after if retry_after is not None else parse_retry_after(self.client_show_message)
 
@@ -268,36 +277,36 @@ class Undeliverable(RpcError):
 
 
 __all__ = [
-    "RubigramError",
-    "RubikaError",
-    "TransportError",
-    "NetworkError",
-    "RequestTimeout",
-    "DecodeError",
-    "StorageError",
     "AuthError",
-    "LoginRequired",
-    "TmpSessionRequired",
-    "SessionExpired",
+    "AuthKeyInvalid",
     "BotApiError",
-    "RpcError",
-    "InvalidInput",
+    "CodeIsExpired",
     "CodeIsInvalid",
+    "CodeIsUsed",
+    "DecodeError",
+    "FloodWaitError",
+    "InvalidAuth",
+    "InvalidInput",
+    "InvalidMethod",
+    "LoginRequired",
+    "NetworkError",
+    "NotRegistered",
+    "NotSupportedApiVersion",
     "PhoneCodeInvalid",
     "PhoneHashInvalid",
-    "NotSupportedApiVersion",
-    "ServerError",
-    "InvalidMethod",
-    "CodeIsUsed",
-    "CodeIsExpired",
-    "InvalidAuth",
-    "AuthKeyInvalid",
-    "NotRegistered",
     "RegisterDeviceRequired",
+    "RequestTimeout",
+    "RpcError",
+    "RubigramError",
+    "RubikaError",
+    "ServerError",
+    "SessionExpired",
+    "StorageError",
+    "TmpSessionRequired",
     "TooRequests",
-    "FloodWaitError",
-    "UsernameExists",
+    "TransportError",
     "Undeliverable",
+    "UsernameExists",
     "extract_show_message",
     "parse_retry_after",
 ]

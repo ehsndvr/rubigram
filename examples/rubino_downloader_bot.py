@@ -22,7 +22,14 @@ async def send_post_media(target_guid: str, post: RubinoPost, path: Path) -> Non
 
     if file_type == "video":
         try:
-            await app.send_video(target_guid, path, text=caption, height=int(post.height or 0), width=int(post.width or 0), duration_ms=int((post.duration or 0) * 1000))
+            await app.send_video(
+                target_guid,
+                path,
+                text=caption,
+                height=int(post.height or 0),
+                width=int(post.width or 0),
+                duration_ms=int((post.duration or 0) * 1000),
+            )
             return
         except InvalidInput:
             print("send_video returned INVALID_INPUT, falling back to send_document")
@@ -54,7 +61,7 @@ async def on_rubino_post(client: Client, message: Message):
     try:
         downloaded = await downloadable.download(file_name=tmp_path.name)
         print("downloaded", downloaded)
-        await send_post_media(message.object_guid, post, Path(downloaded))
+        await send_post_media(message.object_guid or "", post, Path(downloaded))
     finally:
         tmp_path.unlink(missing_ok=True)
 

@@ -166,18 +166,18 @@ class PollOptionVoters(Object):
 
 
 __all__ = [
-    "StickerSet",
-    "StickerSets",
-    "StickerSetResult",
-    "StickerSetting",
-    "GifSet",
     "AvailableReaction",
     "AvailableReactions",
-    "UserMessageReaction",
-    "MessageReactions",
     "ChatReactions",
-    "PollStatus",
+    "GifSet",
+    "MessageReactions",
     "Poll",
-    "PollStatusResult",
     "PollOptionVoters",
+    "PollStatus",
+    "PollStatusResult",
+    "StickerSet",
+    "StickerSetResult",
+    "StickerSets",
+    "StickerSetting",
+    "UserMessageReaction",
 ]

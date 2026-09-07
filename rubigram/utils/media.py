@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 
-def parse_ogg_opus_duration_ms(path: "str | Path") -> float:
+def parse_ogg_opus_duration_ms(path: str | Path) -> float:
     """Duration of an OGG/Opus file in milliseconds (``0.0`` when it cannot be read)."""
     data = Path(path).read_bytes()
     offset = 0

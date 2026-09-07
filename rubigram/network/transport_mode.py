@@ -30,7 +30,7 @@ class Transport(str, Enum):
         return self is Transport.WS
 
     @classmethod
-    def coerce(cls, value: "str | Transport") -> "Transport":
+    def coerce(cls, value: str | Transport) -> Transport:
         """Normalize ``value`` (``"ws"``/``"http"`` or a member) to a member.
 
         Raises ``ValueError`` for anything else so a typo fails at the call site.

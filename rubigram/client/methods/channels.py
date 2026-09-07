@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
+from rubigram.client.base import BaseClient
 from rubigram.raw.functions import build_updated_parameters
 from rubigram.raw.methods import (
     AddChannel,
@@ -43,15 +44,12 @@ from rubigram.types import (
 
 from .groups import _hash_link
 
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
-
 _EDITABLE = ("title", "description", "channel_type", "sign_messages", "chat_reaction_setting")
 
 
-class Channels:
+class Channels(BaseClient):
     async def add_channel(
-        self: "Client",
+        self,
         title: str,
         description: str = "",
         channel_type: Any = "Private",
@@ -74,12 +72,12 @@ class Channels:
 
     create_channel = add_channel
 
-    async def get_channel_info(self: "Client", object_guid: Any = None, *, peer: Any = None) -> ChannelInfo:
+    async def get_channel_info(self, object_guid: Any = None, *, peer: Any = None) -> ChannelInfo:
         """``getChannelInfo``. [HTTP]"""
         return await self.invoke(GetChannelInfo(channel_guid=self._resolve_object_guid(object_guid, peer=peer)))
 
     async def edit_channel_info(
-        self: "Client",
+        self,
         object_guid: Any = None,
         *,
         peer: Any = None,
@@ -91,79 +89,155 @@ class Channels:
     ) -> EditChannelInfoResult:
         """Change channel settings (``editChannelInfo``); only the given fields are sent. [HTTP]"""
         values, names = build_updated_parameters(
-            {"title": title, "description": description, "channel_type": channel_type, "sign_messages": sign_messages, "chat_reaction_setting": chat_reaction_setting},
+            {
+                "title": title,
+                "description": description,
+                "channel_type": channel_type,
+                "sign_messages": sign_messages,
+                "chat_reaction_setting": chat_reaction_setting,
+            },
             allowed=_EDITABLE,
         )
         if not names:
             raise ValueError("At least one supported channel field must be provided")
-        return await self.invoke(EditChannelInfo(channel_guid=self._resolve_object_guid(object_guid, peer=peer), updated_parameters=names, **values))
+        return await self.invoke(
+            EditChannelInfo(channel_guid=self._resolve_object_guid(object_guid, peer=peer), updated_parameters=names, **values)
+        )
 
-    async def add_channel_members(self: "Client", object_guid: Any = None, member_guids: Sequence[Any] | None = None, *, peer: Any = None) -> AddChannelMembersResult:
-        return await self.invoke(AddChannelMembers(channel_guid=self._resolve_object_guid(object_guid, peer=peer), member_guids=self._resolve_guids(member_guids)))
+    async def add_channel_members(
+        self, object_guid: Any = None, member_guids: Sequence[Any] | None = None, *, peer: Any = None
+    ) -> AddChannelMembersResult:
+        """Add users to a channel (``addChannelMembers``). [HTTP]"""
+        return await self.invoke(
+            AddChannelMembers(
+                channel_guid=self._resolve_object_guid(object_guid, peer=peer), member_guids=self._resolve_guids(member_guids)
+            )
+        )
 
-    async def get_channel_all_members(self: "Client", object_guid: Any = None, *, peer: Any = None, start_id: Optional[str] = None, search_text: Optional[str] = None) -> GroupMembers:
-        return await self.invoke(GetChannelAllMembers(channel_guid=self._resolve_object_guid(object_guid, peer=peer), start_id=start_id, search_text=search_text))
+    async def get_channel_all_members(
+        self, object_guid: Any = None, *, peer: Any = None, start_id: Optional[str] = None, search_text: Optional[str] = None
+    ) -> GroupMembers:
+        """Members of a channel, one page at a time (``getChannelAllMembers``); ``next_start_id`` continues. [HTTP]"""
+        return await self.invoke(
+            GetChannelAllMembers(channel_guid=self._resolve_object_guid(object_guid, peer=peer), start_id=start_id, search_text=search_text)
+        )
 
-    async def get_channel_admin_members(self: "Client", object_guid: Any = None, *, peer: Any = None, start_id: Optional[str] = None, search_text: Optional[str] = None) -> GroupMembers:
-        return await self.invoke(GetChannelAdminMembers(channel_guid=self._resolve_object_guid(object_guid, peer=peer), start_id=start_id, search_text=search_text))
+    async def get_channel_admin_members(
+        self, object_guid: Any = None, *, peer: Any = None, start_id: Optional[str] = None, search_text: Optional[str] = None
+    ) -> GroupMembers:
+        """Admins of a channel (``getChannelAdminMembers``). [HTTP]"""
+        return await self.invoke(
+            GetChannelAdminMembers(
+                channel_guid=self._resolve_object_guid(object_guid, peer=peer), start_id=start_id, search_text=search_text
+            )
+        )
 
-    async def get_banned_channel_members(self: "Client", object_guid: Any = None, *, peer: Any = None, start_id: Optional[str] = None, search_text: Optional[str] = None) -> GroupMembers:
-        return await self.invoke(GetBannedChannelMembers(channel_guid=self._resolve_object_guid(object_guid, peer=peer), start_id=start_id, search_text=search_text))
+    async def get_banned_channel_members(
+        self, object_guid: Any = None, *, peer: Any = None, start_id: Optional[str] = None, search_text: Optional[str] = None
+    ) -> GroupMembers:
+        """Banned members of a channel, one page at a time (``getBannedChannelMembers``). [HTTP]"""
+        return await self.invoke(
+            GetBannedChannelMembers(
+                channel_guid=self._resolve_object_guid(object_guid, peer=peer), start_id=start_id, search_text=search_text
+            )
+        )
 
-    async def ban_channel_member(self: "Client", object_guid: Any, member_guid: Any) -> BanChannelMemberResult:
-        return await self.invoke(BanChannelMember(channel_guid=self._resolve_object_guid(object_guid), member_guid=self._resolve_object_guid(member_guid), action="Set"))
+    async def ban_channel_member(self, object_guid: Any, member_guid: Any) -> BanChannelMemberResult:
+        """Ban a member from a channel (``banChannelMember`` / ``Set``). [HTTP]"""
+        return await self.invoke(
+            BanChannelMember(
+                channel_guid=self._resolve_object_guid(object_guid), member_guid=self._resolve_object_guid(member_guid), action="Set"
+            )
+        )
 
-    async def unban_channel_member(self: "Client", object_guid: Any, member_guid: Any) -> BanChannelMemberResult:
-        return await self.invoke(BanChannelMember(channel_guid=self._resolve_object_guid(object_guid), member_guid=self._resolve_object_guid(member_guid), action="Unset"))
+    async def unban_channel_member(self, object_guid: Any, member_guid: Any) -> BanChannelMemberResult:
+        """Lift a channel ban (``banChannelMember`` / ``Unset``). [HTTP]"""
+        return await self.invoke(
+            BanChannelMember(
+                channel_guid=self._resolve_object_guid(object_guid), member_guid=self._resolve_object_guid(member_guid), action="Unset"
+            )
+        )
 
-    async def set_channel_admin(self: "Client", object_guid: Any = None, member_guid: Any = None, access_list: Sequence[Any] = (), *, peer: Any = None) -> SetGroupAdminResult:
-        return await self.invoke(SetChannelAdmin(channel_guid=self._resolve_object_guid(object_guid, peer=peer), member_guid=self._resolve_object_guid(member_guid), action="SetAdmin", access_list=self._plain_list(access_list)))
+    async def set_channel_admin(
+        self, object_guid: Any = None, member_guid: Any = None, access_list: Sequence[Any] = (), *, peer: Any = None
+    ) -> SetGroupAdminResult:
+        """Promote a member with a list of :class:`~rubigram.enums.ChannelAdminAccess` rights (``setChannelAdmin`` / ``SetAdmin``). [HTTP]"""
+        return await self.invoke(
+            SetChannelAdmin(
+                channel_guid=self._resolve_object_guid(object_guid, peer=peer),
+                member_guid=self._resolve_object_guid(member_guid),
+                action="SetAdmin",
+                access_list=self._plain_list(access_list),
+            )
+        )
 
     update_channel_admin_access = set_channel_admin
 
-    async def unset_channel_admin(self: "Client", object_guid: Any = None, member_guid: Any = None, *, peer: Any = None) -> SetGroupAdminResult:
-        return await self.invoke(SetChannelAdmin(channel_guid=self._resolve_object_guid(object_guid, peer=peer), member_guid=self._resolve_object_guid(member_guid), action="UnsetAdmin", access_list=None))
+    async def unset_channel_admin(self, object_guid: Any = None, member_guid: Any = None, *, peer: Any = None) -> SetGroupAdminResult:
+        """Demote an admin (``setChannelAdmin`` / ``UnsetAdmin``). [HTTP]"""
+        return await self.invoke(
+            SetChannelAdmin(
+                channel_guid=self._resolve_object_guid(object_guid, peer=peer),
+                member_guid=self._resolve_object_guid(member_guid),
+                action="UnsetAdmin",
+                access_list=None,
+            )
+        )
 
-    async def get_channel_admin_access_list(self: "Client", object_guid: Any, member_guid: Any) -> AdminAccessList:
-        return await self.invoke(GetChannelAdminAccessList(channel_guid=self._resolve_object_guid(object_guid), member_guid=self._resolve_object_guid(member_guid)))
+    async def get_channel_admin_access_list(self, object_guid: Any, member_guid: Any) -> AdminAccessList:
+        """The admin rights of one member (``getChannelAdminAccessList``). [HTTP]"""
+        return await self.invoke(
+            GetChannelAdminAccessList(
+                channel_guid=self._resolve_object_guid(object_guid), member_guid=self._resolve_object_guid(member_guid)
+            )
+        )
 
-    async def get_channel_link(self: "Client", object_guid: Any = None, *, peer: Any = None) -> ChannelLink:
+    async def get_channel_link(self, object_guid: Any = None, *, peer: Any = None) -> ChannelLink:
         """The primary join link (``getChannelLink``). [HTTP]"""
         return await self.invoke(GetChannelLink(channel_guid=self._resolve_object_guid(object_guid, peer=peer)))
 
-    async def set_channel_link(self: "Client", object_guid: Any) -> ChannelLink:
+    async def set_channel_link(self, object_guid: Any) -> ChannelLink:
         """Regenerate the primary join link (``setChannelLink``). [HTTP]"""
         return await self.invoke(SetChannelLink(channel_guid=self._resolve_object_guid(object_guid)))
 
-    async def update_channel_username(self: "Client", object_guid: Any, username: str) -> RawObject:
-        return await self.invoke(UpdateChannelUsername(channel_guid=self._resolve_object_guid(object_guid), username=str(username).lstrip("@")))
+    async def update_channel_username(self, object_guid: Any, username: str) -> RawObject:
+        """Set the public username of a channel (``updateChannelUsername``). [HTTP]"""
+        return await self.invoke(
+            UpdateChannelUsername(channel_guid=self._resolve_object_guid(object_guid), username=str(username).lstrip("@"))
+        )
 
-    async def check_channel_username(self: "Client", username: str) -> UsernameCheck:
+    async def check_channel_username(self, username: str) -> UsernameCheck:
+        """Whether a channel username is free (``checkChannelUsername``). [HTTP]"""
         return await self.invoke(CheckChannelUsername(username=str(username).lstrip("@")))
 
-    async def join_channel_action(self: "Client", object_guid: Any, action: Any) -> JoinedChannel:
+    async def join_channel_action(self, object_guid: Any, action: Any) -> JoinedChannel:
         """``joinChannelAction`` (``Join`` / ``Leave`` / ``Remove``). [HTTP]"""
-        return await self.invoke(JoinChannelAction(channel_guid=self._resolve_object_guid(object_guid), action=str(getattr(action, "value", action))))
+        return await self.invoke(
+            JoinChannelAction(channel_guid=self._resolve_object_guid(object_guid), action=str(getattr(action, "value", action)))
+        )
 
-    async def join_channel(self: "Client", channel: Any) -> JoinedChannel:
+    async def join_channel(self, channel: Any) -> JoinedChannel:
         """Join a public channel by guid, or a private one by ``rubika.ir/joinc/<hash>`` link. [HTTP]"""
         value = str(channel)
         if "/joinc/" in value or "/join/" in value:
             return await self.invoke(JoinChannelByLink(hash_link=_hash_link(value)))
         return await self.join_channel_action(channel, "Join")
 
-    async def join_channel_by_link(self: "Client", link: str) -> JoinedChannel:
+    async def join_channel_by_link(self, link: str) -> JoinedChannel:
+        """Join a private channel by its ``rubika.ir/joinc/<hash>`` link (``joinChannelByLink``). [HTTP]"""
         return await self.invoke(JoinChannelByLink(hash_link=_hash_link(link)))
 
-    async def leave_channel(self: "Client", object_guid: Any) -> JoinedChannel:
+    async def leave_channel(self, object_guid: Any) -> JoinedChannel:
+        """Leave a channel (``joinChannelAction`` / ``Leave``). [HTTP]"""
         return await self.join_channel_action(object_guid, "Leave")
 
-    async def get_channel_preview(self: "Client", link: str) -> ChannelPreview:
+    async def get_channel_preview(self, link: str) -> ChannelPreview:
+        """Preview a private channel before joining (``channelPreviewByJoinLink``). [HTTP]"""
         return await self.invoke(ChannelPreviewByJoinLink(hash_link=_hash_link(link)))
 
     channel_preview_by_join_link = get_channel_preview
 
-    async def remove_channel(self: "Client", object_guid: Any) -> RawObject:
+    async def remove_channel(self, object_guid: Any) -> RawObject:
         """Delete a channel you own (``removeChannel``). [HTTP]"""
         return await self.invoke(RemoveChannel(channel_guid=self._resolve_object_guid(object_guid)))
 

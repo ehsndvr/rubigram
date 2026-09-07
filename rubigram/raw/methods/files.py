@@ -34,7 +34,15 @@ class UploadAvatar(RawMethod[Any]):
 class UploadNewGroupAvatar(UploadAvatar):
     """rubigram 0.1 name: the server method is ``uploadAvatar``; both ids default to ``file_id``."""
 
-    def __init__(self, group_guid: str, file_id: str, dc_id: Optional[str] = None, access_hash_rec: Optional[str] = None, *, thumbnail_file_id: Optional[str] = None):
+    def __init__(
+        self,
+        group_guid: str,
+        file_id: str,
+        dc_id: Optional[str] = None,
+        access_hash_rec: Optional[str] = None,
+        *,
+        thumbnail_file_id: Optional[str] = None,
+    ):
         super().__init__(object_guid=group_guid, thumbnail_file_id=thumbnail_file_id or file_id, main_file_id=file_id)
 
 
@@ -65,4 +73,4 @@ class ResetWallpapers(RawMethod[Empty]):
     result = Empty
 
 
-__all__ = ["RequestSendFile", "UploadAvatar", "UploadNewGroupAvatar", "DeleteAvatar", "GetWallpapers", "AddSetWallpaper", "ResetWallpapers"]
+__all__ = ["AddSetWallpaper", "DeleteAvatar", "GetWallpapers", "RequestSendFile", "ResetWallpapers", "UploadAvatar", "UploadNewGroupAvatar"]

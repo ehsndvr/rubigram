@@ -124,10 +124,10 @@ def raise_for_status(payload: Any, *, method: Optional[str] = None) -> None:
 
 
 __all__ = [
+    "STATUS_DET_MAP",
+    "STATUS_DET_VALUES",
     "STATUS_OK",
     "STATUS_VALUES",
-    "STATUS_DET_VALUES",
-    "STATUS_DET_MAP",
     "is_ok",
     "map_rpc_error",
     "raise_for_status",

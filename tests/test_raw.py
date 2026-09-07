@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+# (tests assert on parsed payloads; a missing field is a test failure)
 import json
 from pathlib import Path
 
@@ -62,10 +64,18 @@ def test_every_web_client_method_has_a_raw_class():
 def test_generic_serialization_drops_none_and_converts_enums_and_models():
     method = SetBlockUser(user_guid="u1", action=BlockAction.UNBLOCK)
     assert method.to_input() == {"user_guid": "u1", "action": "Unblock"}
-    assert SendMessage(object_guid="g", rnd="1", text="hi", parse_mode="markdown").to_input() == {"object_guid": "g", "rnd": "1", "text": "hi"}
+    assert SendMessage(object_guid="g", rnd="1", text="hi", parse_mode="markdown").to_input() == {
+        "object_guid": "g",
+        "rnd": "1",
+        "text": "hi",
+    }
     assert serialize_value({"a": None, "b": [MessageEntityType.BOLD]}) == {"b": ["Bold"]}
     assert GetMessages(object_guid="g", max_id="5").to_input() == {"object_guid": "g", "max_id": "5", "sort": "FromMax", "limit": 20}
-    assert SetGroupAdmin(group_guid="g", member_guid="u", action="UnsetAdmin").to_input() == {"group_guid": "g", "member_guid": "u", "action": "UnsetAdmin"}
+    assert SetGroupAdmin(group_guid="g", member_guid="u", action="UnsetAdmin").to_input() == {
+        "group_guid": "g",
+        "member_guid": "u",
+        "action": "UnsetAdmin",
+    }
     assert "SetGroupAdmin(" in repr(SetGroupAdmin(group_guid="g", member_guid="u"))
 
 
@@ -98,16 +108,18 @@ def test_parse_response_uses_result_model_or_raw_object():
     typed = GetUserInfo(user_guid="u").parse_response(None, {"user": {"user_guid": "u", "first_name": "A"}})
     assert isinstance(typed, UserInfo) and typed.user.first_name == "A"
     untyped = raw.methods.GetBotInfo(bot_guid="b").parse_response(None, {"bot": {"bot_guid": "b"}})
-    assert isinstance(untyped, RawObject) and untyped.bot.bot_guid == "b"
+    assert isinstance(untyped, RawObject) and untyped.get("bot").bot_guid == "b"
     assert isinstance(raw.methods.Logout().parse_response(None, None), RawObject)
 
 
 def test_message_metadata_from_markdown_html_and_entities():
     text, metadata = build_message_metadata("hello **bold** and `mono`", parse_mode="markdown")
     assert text == "hello bold and mono"
-    assert metadata == {"meta_data_parts": [{"type": "Bold", "from_index": 6, "length": 4}, {"type": "Mono", "from_index": 15, "length": 4}]}
+    assert metadata == {
+        "meta_data_parts": [{"type": "Bold", "from_index": 6, "length": 4}, {"type": "Mono", "from_index": 15, "length": 4}]
+    }
     text, metadata = build_message_metadata("<b>hi</b> &amp; <i>there</i>", parse_mode="html")
-    assert text == "hi & there"
+    assert text == "hi & there" and metadata is not None
     assert [part["type"] for part in metadata["meta_data_parts"]] == ["Bold", "Italic"]
     assert metadata["meta_data_parts"][1] == {"type": "Italic", "from_index": 5, "length": 5}
     text, metadata = build_message_metadata("plain", entities=[MessageEntity.bold(0, 5)])
@@ -127,10 +139,25 @@ def test_updated_parameters_settings_and_file_builders():
     assert values == {"title": "T", "slow_mode": 10} and names == ["title", "slow_mode"]
     with pytest.raises(ValueError):
         build_updated_parameters({"nope": 1}, allowed=("title",))
-    assert build_settings_input({"show_my_phone_number": "Nobody"}) == {"settings": {"show_my_phone_number": "Nobody"}, "update_parameters": ["show_my_phone_number"]}
+    assert build_settings_input({"show_my_phone_number": "Nobody"}) == {
+        "settings": {"show_my_phone_number": "Nobody"},
+        "update_parameters": ["show_my_phone_number"],
+    }
     with pytest.raises(ValueError):
         build_settings_input({"x": None})
-    block = build_file_inline(file_id="1", dc_id="2", access_hash_rec="r", file_name="a.mp4", size=10, media_type="Video", mime="mp4", width=1, height=2, duration_ms=3000, extra={"is_round": True, "skip": None})
+    block = build_file_inline(
+        file_id="1",
+        dc_id="2",
+        access_hash_rec="r",
+        file_name="a.mp4",
+        size=10,
+        media_type="Video",
+        mime="mp4",
+        width=1,
+        height=2,
+        duration_ms=3000,
+        extra={"is_round": True, "skip": None},
+    )
     assert block["time"] == 3000 and block["is_round"] is True and "skip" not in block and block["type"] == "Video"
     assert guess_upload_mime("photo.JPEG") == "jpg" and guess_upload_mime("clip.mp4") == "mp4" and guess_upload_mime("noext") == "bin"
 
@@ -139,6 +166,10 @@ def test_envelope_builders_match_the_web_client():
     client = build_web_client_info()
     assert client == {"app_name": "Main", "app_version": "4.4.34", "platform": "Web", "package": "web.rubika.ir", "lang_code": "fa"}
     assert build_service_client_info() == {"app_name": "Main", "app_version": "4.4.34", "platform": "PWA", "package": "web.rubika.ir"}
-    assert build_data_object("getUserInfo", {"user_guid": "u"}, client) == {"method": "getUserInfo", "input": {"user_guid": "u"}, "client": client}
+    assert build_data_object("getUserInfo", {"user_guid": "u"}, client) == {
+        "method": "getUserInfo",
+        "input": {"user_guid": "u"},
+        "client": client,
+    }
     plain = build_plain_payload("getBaseInfo", {}, api_version="0", client_info=build_service_client_info(), auth="a")
     assert plain == {"method": "getBaseInfo", "api_version": "0", "data": {}, "client": build_service_client_info(), "auth": "a"}

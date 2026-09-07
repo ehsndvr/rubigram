@@ -126,4 +126,4 @@ class SqliteStorage(Storage):
 FileStorage = SqliteStorage
 SQLiteStorage = SqliteStorage
 
-__all__ = ["SqliteStorage", "FileStorage", "SQLiteStorage", "SCHEMA_VERSION", "build_schema"]
+__all__ = ["SCHEMA_VERSION", "FileStorage", "SQLiteStorage", "SqliteStorage", "build_schema"]

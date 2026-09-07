@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional, Sequence, Union
 
+from rubigram.client.base import CodeCallback
 from rubigram.client.methods import Methods
 from rubigram.crypto import AuthSigner, AuthUnwrapper, Codec
 from rubigram.enums import DcType
@@ -46,8 +47,6 @@ from rubigram.storage import MemoryStorage, SqliteStorage, Storage
 from rubigram.version import __version__
 
 log = logging.getLogger(__name__)
-
-CodeCallback = Callable[..., Union[str, Awaitable[str]]]
 
 
 class Client(Methods):
@@ -91,7 +90,7 @@ class Client(Methods):
         pem_private_key: Optional[str] = None,
         timeout: float = 20.0,
         proxy: Optional[str] = None,
-        transport: "str | Transport" = Transport.WS,
+        transport: str | Transport = Transport.WS,
         user_agent: Optional[str] = None,
         app_version: Optional[str] = None,
         lang_code: Optional[str] = None,
@@ -136,18 +135,24 @@ class Client(Methods):
         self.code_callback = code_callback
         self.interactive = interactive if interactive is not None else (interactive_auth if interactive_auth is not None else True)
         self.socket_urls = list(socket_urls or self.DEFAULT_SOCKET_URLS)
-        self.enable_socket = enable_socket if enable_socket is not None else (enable_socket_handshake if enable_socket_handshake is not None else True)
+        self.enable_socket = (
+            enable_socket if enable_socket is not None else (enable_socket_handshake if enable_socket_handshake is not None else True)
+        )
         self.enable_register_device = enable_register_device
         self.retry_policy = retry_policy or DEFAULT_RETRY_POLICY
         self.poll_interval = poll_interval
         self.socket_heartbeat_interval = socket_heartbeat_interval or self.SOCKET_HEARTBEAT_INTERVAL
-        self.device_info: Dict[str, str] = dict(device_info) if device_info else {
-            "app_name": self.APP_NAME,
-            "app_version": self.app_version,
-            "platform": self.PLATFORM,
-            "package": self.PACKAGE,
-            "lang_code": self.lang_code,
-        }
+        self.device_info: Dict[str, str] = (
+            dict(device_info)
+            if device_info
+            else {
+                "app_name": self.APP_NAME,
+                "app_version": self.app_version,
+                "platform": self.PLATFORM,
+                "package": self.PACKAGE,
+                "lang_code": self.lang_code,
+            }
+        )
         self._transport_mode = Transport.coerce(transport)
 
         if storage is not None:
@@ -182,31 +187,18 @@ class Client(Methods):
     # -- factories ------------------------------------------------------------
 
     @classmethod
-    def from_session_string(cls, name: str, session_string: str, **kwargs: Any) -> "Client":
+    def from_session_string(cls, name: str, session_string: str, **kwargs: Any) -> Client:
         """Create an in-memory client from a portable session string."""
         return cls(name, session_string=session_string, **kwargs)
 
     # -- properties -----------------------------------------------------------
 
-    @property
-    def is_connected(self) -> bool:
-        return self._is_connected
-
-    @property
-    def is_bot(self) -> bool:
-        return bool(self.token)
-
-    @property
-    def transport(self) -> Transport:
-        """Update delivery mode (``Transport.WS`` or ``Transport.HTTP``)."""
-        return self._transport_mode
-
-    def set_transport(self, mode: "str | Transport") -> None:
+    def set_transport(self, mode: str | Transport) -> None:
         """Switch the update delivery mode; the socket is opened or closed lazily."""
         self._transport_mode = Transport.coerce(mode)
 
     @contextlib.asynccontextmanager
-    async def use_transport(self, mode: "str | Transport"):
+    async def use_transport(self, mode: str | Transport):
         """Temporarily switch the transport mode for the duration of the block."""
         previous = self._transport_mode
         self._transport_mode = Transport.coerce(mode)
@@ -216,22 +208,18 @@ class Client(Methods):
             self._transport_mode = previous
 
     @property
-    def dispatcher(self) -> Dispatcher:
-        return self._dispatcher
-
-    @property
     def socket(self) -> Optional[SocketTransport]:
         return self._socket
 
     # -- lifecycle ------------------------------------------------------------
 
-    async def __aenter__(self) -> "Client":
+    async def __aenter__(self) -> Client:
         return await self.start()
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.stop()
 
-    async def start(self) -> "Client":
+    async def start(self) -> Client:
         """Open the session, discover DCs, log in if needed and connect."""
         if self._is_connected:
             return self
@@ -257,11 +245,26 @@ class Client(Methods):
         self.dc = DcRepository.from_dict(await self.storage.dc_repository())
         await self._refresh_dcs(required=not self.dc.storages)
         self.dc.merge_urls(DcType.SOCKET, self.socket_urls)
-        self._http = HttpTransport(self.dc.pool(DcType.API), timeout=self.timeout, proxy=self.proxy, retry_policy=self.retry_policy, refresh_urls=self._refresh_api_urls, user_agent=self.user_agent)
-        self._bot_dc_http = HttpTransport(self.dc.pool(DcType.BOT), timeout=self.timeout, proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent)
-        self._service = JsonTransport(self.dc.pool(DcType.API), timeout=self.timeout, proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent)
-        self._upload = UploadTransport(timeout=max(self.timeout, 30.0), proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent)
-        self._download = DownloadTransport(timeout=max(self.timeout, 30.0), proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent)
+        self._http = HttpTransport(
+            self.dc.pool(DcType.API),
+            timeout=self.timeout,
+            proxy=self.proxy,
+            retry_policy=self.retry_policy,
+            refresh_urls=self._refresh_api_urls,
+            user_agent=self.user_agent,
+        )
+        self._bot_dc_http = HttpTransport(
+            self.dc.pool(DcType.BOT), timeout=self.timeout, proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent
+        )
+        self._service = JsonTransport(
+            self.dc.pool(DcType.API), timeout=self.timeout, proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent
+        )
+        self._upload = UploadTransport(
+            timeout=max(self.timeout, 30.0), proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent
+        )
+        self._download = DownloadTransport(
+            timeout=max(self.timeout, 30.0), proxy=self.proxy, retry_policy=self.retry_policy, user_agent=self.user_agent
+        )
         current_url = await self.storage.api_url()
         if current_url:
             self.dc.pool(DcType.API).set_current(current_url)
@@ -342,17 +345,17 @@ class Client(Methods):
             finally:
                 await self.stop()
 
-        try:
+        with contextlib.suppress(KeyboardInterrupt):  # pragma: no cover - interactive
             asyncio.run(main())
-        except KeyboardInterrupt:  # pragma: no cover - interactive
-            pass
 
     # -- handler registration -------------------------------------------------
 
     def add_handler(self, handler: Handler, group: int = 0) -> Handler:
+        """Register a :class:`~rubigram.handlers.Handler` instance in ``group``."""
         return self._dispatcher.add_handler(handler, group)
 
     def remove_handler(self, handler: Handler, group: Optional[int] = None) -> bool:
+        """Unregister a handler; returns whether it was found."""
         return self._dispatcher.remove_handler(handler, group)
 
     def _decorator(self, handler_cls: type[Handler], filters: Any, group: int):
@@ -367,30 +370,39 @@ class Client(Methods):
         return self._decorator(MessageHandler, filters, group)
 
     def on_edited_message(self, filters: Any = None, group: int = 0):
+        """Register a handler for edited messages (``action == "Edit"``; bot ``UpdatedMessage``). [both]"""
         return self._decorator(EditedMessageHandler, filters, group)
 
     def on_deleted_message(self, filters: Any = None, group: int = 0):
+        """Register a handler for deleted messages (``action == "Delete"``; bot ``RemovedMessage``). [both]"""
         return self._decorator(DeletedMessageHandler, filters, group)
 
     def on_chat_update(self, filters: Any = None, group: int = 0):
+        """Register a handler for chat list changes (``chat_updates``: unread counts, pins, new chats). [WS]"""
         return self._decorator(ChatUpdateHandler, filters, group)
 
     def on_activity(self, filters: Any = None, group: int = 0):
+        """Register a handler for typing/recording/uploading activities (``show_activities``). [WS]"""
         return self._decorator(ActivityHandler, filters, group)
 
     def on_notification(self, filters: Any = None, group: int = 0):
+        """Register a handler for ``show_notifications`` entries. [WS]"""
         return self._decorator(NotificationHandler, filters, group)
 
     def on_draft_update(self, filters: Any = None, group: int = 0):
+        """Register a handler for draft changes (``draft_message_updates``). [WS]"""
         return self._decorator(DraftUpdateHandler, filters, group)
 
     def on_inline_message(self, filters: Any = None, group: int = 0):
+        """Register a handler for bot inline messages delivered by webhooks. [bot]"""
         return self._decorator(InlineMessageHandler, filters, group)
 
     def on_callback_query(self, filters: Any = None, group: int = 0):
+        """Register a handler for bot button presses (messages carrying ``aux_data.button_id``). [bot]"""
         return self._decorator(CallbackQueryHandler, filters, group)
 
     def on_raw_update(self, filters: Any = None, group: int = 0):
+        """Register a handler that receives every decrypted frame (:class:`~rubigram.types.Updates`) or bot update. [both]"""
         return self._decorator(RawUpdateHandler, filters, group)
 
     # -- internals --------------------------------------------------------------

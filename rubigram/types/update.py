@@ -70,13 +70,31 @@ class Updates(Object):
 
     def __post_init__(self, client: Any = None) -> None:
         super().__post_init__(client)
-        for name in ("chat_updates", "message_updates", "show_activities", "show_notifications", "draft_message_updates", "group_voice_chat_updates", "group_voice_chat_participant_updates"):
+        for name in (
+            "chat_updates",
+            "message_updates",
+            "show_activities",
+            "show_notifications",
+            "draft_message_updates",
+            "group_voice_chat_updates",
+            "group_voice_chat_participant_updates",
+        ):
             if getattr(self, name) is None:
                 setattr(self, name, [])
 
     @property
     def is_empty(self) -> bool:
-        return not any((self.chat_updates, self.message_updates, self.show_activities, self.show_notifications, self.draft_message_updates, self.group_voice_chat_updates, self.group_voice_chat_participant_updates))
+        return not any(
+            (
+                self.chat_updates,
+                self.message_updates,
+                self.show_activities,
+                self.show_notifications,
+                self.draft_message_updates,
+                self.group_voice_chat_updates,
+                self.group_voice_chat_participant_updates,
+            )
+        )
 
     @property
     def messages(self) -> list[Any]:
@@ -87,11 +105,11 @@ class Updates(Object):
 SocketUpdates = Updates
 
 __all__ = [
-    "ShowActivity",
-    "NotificationMessageData",
-    "ShowNotification",
     "DraftMessage",
     "DraftMessageUpdate",
-    "Updates",
+    "NotificationMessageData",
+    "ShowActivity",
+    "ShowNotification",
     "SocketUpdates",
+    "Updates",
 ]

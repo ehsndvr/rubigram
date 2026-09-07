@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import warnings
 
-from rubigram.errors import *  # noqa: F401,F403
+from rubigram.errors import *  # noqa: F403
 from rubigram.errors import __all__ as _all
 
 warnings.warn(
@@ -18,4 +18,4 @@ warnings.warn(
     stacklevel=2,
 )
 
-__all__ = list(_all)
+__all__ = list(_all)  # pyright: ignore[reportUnsupportedDunderAll]

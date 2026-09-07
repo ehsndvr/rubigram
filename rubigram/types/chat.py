@@ -7,6 +7,7 @@ from typing import Any, Optional
 from .files import AvatarThumbnail
 from .message import Message, MessageUpdate
 from .object import Object, model
+from .user import PeerObject
 
 _GUID_PREFIXES = {"u0": "User", "g0": "Group", "c0": "Channel", "b0": "Bot", "s0": "Service"}
 
@@ -16,7 +17,6 @@ def chat_type_from_guid(object_guid: Optional[str]) -> Optional[str]:
     if not object_guid:
         return None
     return _GUID_PREFIXES.get(str(object_guid)[:2])
-from .user import PeerObject
 
 
 @model
@@ -312,18 +312,18 @@ class ShareUrl(Object):
 
 __all__ = [
     "Chat",
+    "ChatAdsResult",
     "ChatUpdate",
-    "SocketChatUpdate",
     "ChatsResult",
     "ChatsUpdates",
-    "SentMessage",
-    "ForwardedMessages",
-    "DeletedMessages",
     "DeleteChatHistoryResult",
+    "DeletedMessages",
+    "ForwardedMessages",
+    "MessageReadParticipants",
     "MessagesResult",
     "MessagesUpdates",
     "SearchMessagesResult",
-    "MessageReadParticipants",
-    "ChatAdsResult",
+    "SentMessage",
     "ShareUrl",
+    "SocketChatUpdate",
 ]

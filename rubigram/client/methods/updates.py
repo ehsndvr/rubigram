@@ -5,24 +5,21 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import Any, Dict, Optional
 
+from rubigram.client.base import BaseClient
 from rubigram.errors import DecodeError, LoginRequired, NetworkError, RubigramError, TransportError
 from rubigram.network import SocketTransport, Transport
 from rubigram.raw.methods import GetChatsUpdates, GetMessagesUpdates
 from rubigram.types import ChatsUpdates, MessagesUpdates, MessageUpdate, Updates
-from rubigram.types.bot import BotUpdates
-
-if TYPE_CHECKING:  # pragma: no cover
-    from rubigram.client.client import Client
 
 log = logging.getLogger(__name__)
 
 
-class UpdatesMixin:
+class UpdatesMixin(BaseClient):
     # -- socket ---------------------------------------------------------------
 
-    async def _ensure_socket(self: "Client", force_reconnect: bool = False) -> None:
+    async def _ensure_socket(self, force_reconnect: bool = False) -> None:
         if not self.enable_socket or self.is_bot:
             return
         auth = await self.storage.auth()
@@ -39,7 +36,7 @@ class UpdatesMixin:
             )
         await self._socket.connect(auth, force_reconnect=force_reconnect)
 
-    async def receive_update(self: "Client", timeout: Optional[float] = None) -> Updates:
+    async def receive_update(self, timeout: Optional[float] = None) -> Updates:
         """Wait for the next pushed frame and return it decrypted. [WS]"""
         self._require_user_session("receive_update")
         auth = await self.storage.auth()
@@ -54,21 +51,21 @@ class UpdatesMixin:
                 return self._decode_socket_frame(frame, auth)
             log.debug("Ignoring socket frame without updates: %s", list(frame))
 
-    async def receive_socket_update(self: "Client", timeout: Optional[float] = None) -> Updates:
+    async def receive_socket_update(self, timeout: Optional[float] = None) -> Updates:
         """rubigram 0.1 name of :meth:`receive_update`."""
         return await self.receive_update(timeout=timeout)
 
-    def _decode_socket_frame(self: "Client", frame: Dict[str, Any], auth: str) -> Updates:
+    def _decode_socket_frame(self, frame: Dict[str, Any], auth: str) -> Updates:
         assert self._codec is not None
         try:
             decrypted = self._codec.decrypt_response({"data_enc": frame["data_enc"]}, auth)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise DecodeError(f"Failed to decrypt a socket frame: {exc}") from exc
         return Updates._parse(self, decrypted)
 
     # -- polling ----------------------------------------------------------------
 
-    async def get_chats_updates(self: "Client", state: Optional[int] = None) -> ChatsUpdates:
+    async def get_chats_updates(self, state: Optional[int] = None) -> ChatsUpdates:
         """``getChatsUpdates`` since ``state`` (defaults to the stored state); persists ``new_state``. [HTTP]"""
         if state is None:
             state = await self.storage.updates_state()
@@ -81,7 +78,7 @@ class UpdatesMixin:
             await self.storage.set_updates_state(result.new_state)
         return result
 
-    async def get_messages_updates(self: "Client", object_guid: Any, state: Optional[int] = None) -> MessagesUpdates:
+    async def get_messages_updates(self, object_guid: Any, state: Optional[int] = None) -> MessagesUpdates:
         """``getMessagesUpdates`` for one chat; the per-chat state is persisted. [HTTP]"""
         guid = self._resolve_object_guid(object_guid)
         if state is None:
@@ -95,7 +92,7 @@ class UpdatesMixin:
             await self.storage.set_chat_state(guid, result.new_state)
         return result
 
-    async def get_updates(self: "Client", *, timeout: Optional[float] = None, transport: "str | Transport | None" = None, **kwargs: Any) -> Any:
+    async def get_updates(self, *, timeout: Optional[float] = None, transport: str | Transport | None = None, **kwargs: Any) -> Any:
         """Fetch pending updates.
 
         - bots: ``getUpdates`` (Bot API long polling) → :class:`~rubigram.types.bot.BotUpdates`;
@@ -112,7 +109,7 @@ class UpdatesMixin:
 
     # -- background listener -----------------------------------------------------
 
-    async def _ensure_listener(self: "Client", *, force: bool = False) -> None:
+    async def _ensure_listener(self, *, force: bool = False) -> None:
         """Start the background update loop when handlers are registered (or ``force``).
 
         Without handlers nothing is polled, so :meth:`receive_update` /
@@ -134,7 +131,7 @@ class UpdatesMixin:
         else:
             self._listener_task = asyncio.create_task(self._http_polling_loop(), name="rubigram-http-polling")
 
-    async def _stop_listener(self: "Client") -> None:
+    async def _stop_listener(self) -> None:
         task = self._listener_task
         self._listener_task = None
         if task is not None and task is not asyncio.current_task():
@@ -142,7 +139,7 @@ class UpdatesMixin:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
 
-    async def _socket_listener_loop(self: "Client") -> None:
+    async def _socket_listener_loop(self) -> None:
         try:
             while self._is_connected:
                 try:
@@ -157,16 +154,16 @@ class UpdatesMixin:
                     await self._dispatcher.dispatch_updates(updates)
                 except asyncio.CancelledError:
                     raise
-                except Exception:  # noqa: BLE001 - never let one bad update kill the listener
+                except Exception:
                     log.exception("Dispatching an update failed")
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("Update listener stopped because of an unexpected error")
         finally:
             self._idle_event.set()
 
-    async def _http_polling_loop(self: "Client") -> None:
+    async def _http_polling_loop(self) -> None:
         """Approximate push delivery with ``getChatsUpdates``: new ``last_message`` entries become message events."""
         seen: Dict[str, str] = {}
         try:
@@ -191,7 +188,16 @@ class UpdatesMixin:
                     if first_time:
                         continue
                     message.object_guid = message.object_guid or chat.object_guid
-                    updates.message_updates.append(MessageUpdate(client=self, message_id=message.message_id, action="New", message=message, object_guid=chat.object_guid, type=chat.type))
+                    updates.message_updates.append(
+                        MessageUpdate(
+                            client=self,
+                            message_id=message.message_id,
+                            action="New",
+                            message=message,
+                            object_guid=chat.object_guid,
+                            type=chat.type,
+                        )
+                    )
                 if not updates.is_empty:
                     with contextlib.suppress(Exception):
                         await self._dispatcher.dispatch_updates(updates)
@@ -201,7 +207,7 @@ class UpdatesMixin:
         finally:
             self._idle_event.set()
 
-    async def _bot_polling_loop(self: "Client") -> None:
+    async def _bot_polling_loop(self) -> None:
         try:
             while self._is_connected:
                 try:
@@ -222,23 +228,24 @@ class UpdatesMixin:
         finally:
             self._idle_event.set()
 
-    async def idle(self: "Client") -> None:
+    async def idle(self) -> None:
         """Keep receiving updates until :meth:`stop` is called or the loop is cancelled. [both]"""
         await self._ensure_listener(force=True)
         self._idle_event.clear()
         await self._idle_event.wait()
 
-    async def start_polling(self: "Client", *, limit: int = 100, idle_sleep: Optional[float] = None) -> None:
+    async def start_polling(self, *, limit: int = 100, idle_sleep: Optional[float] = None) -> None:
         """rubigram 0.1 bot API: start the background polling loop."""
         if idle_sleep is not None:
             self.poll_interval = idle_sleep
         self._bot_poll_limit = limit
         await self._ensure_listener(force=True)
 
-    async def stop_polling(self: "Client") -> None:
+    async def stop_polling(self) -> None:
+        """Stop the background update loop started by :meth:`start_polling` or :meth:`idle`. [both]"""
         await self._stop_listener()
 
-    async def dispatch_update(self: "Client", update: Any) -> None:
+    async def dispatch_update(self, update: Any) -> None:
         """Feed an update object (``Updates``, bot ``Update`` or ``InlineMessage``) to the handlers."""
         from rubigram.types.bot import InlineMessage, Update
 

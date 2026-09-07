@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Generic, Literal, Optiona
 from rubigram.enums import DcType
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rubigram
+    pass
 
 ResultT = TypeVar("ResultT", covariant=True)
 
@@ -93,7 +93,7 @@ class RawMethod(ABC, Generic[ResultT]):
             payload[key] = serialize_value(value)
         return payload
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> ResultT:
+    def parse_response(self, client: Any, data: Any) -> ResultT:
         """Build the typed result (``result`` model, else :class:`RawObject`)."""
         result_cls = type(self).result
         if result_cls is None:
@@ -108,4 +108,4 @@ class RawMethod(ABC, Generic[ResultT]):
         return f"{type(self).__name__}({self.to_input()!r})"
 
 
-__all__ = ["RawMethod", "AuthMode", "ResultT", "serialize_value"]
+__all__ = ["AuthMode", "RawMethod", "ResultT", "serialize_value"]
