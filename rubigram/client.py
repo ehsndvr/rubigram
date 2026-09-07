@@ -27,6 +27,7 @@ from .bot.types import (
     WebhookUpdate,
 )
 from .enums import ParseMode
+from .enums import DcType
 from .peer import Peer
 from rubigram.crypto import (
     AuthSigner,
@@ -51,7 +52,7 @@ from rubigram.exceptions import (
 )
 from rubigram.network.discovery import DcDiscovery
 from rubigram.network.socket import SocketTransport
-from rubigram.network.transport import ApiUrlPool, RpcTransport
+from rubigram.network.transport import ApiUrlPool, JsonTransport, RpcTransport
 from rubigram.network.upload import UploadTransport
 from rubigram.network.download import DownloadTransport
 from rubigram.methods import Methods
@@ -91,6 +92,7 @@ from rubigram.types import (
     SentMessage,
     SocketUpdates,
     UploadDescriptor,
+    RubinoPostsResult,
     UserInfo,
 )
 from rubigram.utils import generate_device_hash, generate_tmp_session
@@ -117,6 +119,7 @@ class Client(Methods):
     APP_NAME = "Main"
     APP_VERSION = "4.4.27"
     PLATFORM = "Web"
+    PWA_PLATFORM = "PWA"
     PACKAGE = "web.rubika.ir"
     LANG_CODE = "fa"
     SYSTEM_VERSION = "Windows 10"
@@ -189,6 +192,7 @@ class Client(Methods):
         self._transport: Optional[RpcTransport] = None
         self._upload_transport: Optional[UploadTransport] = None
         self._download_transport: Optional[DownloadTransport] = None
+        self._rubino_transport: Optional[JsonTransport] = None
         self._socket_transport: Optional[SocketTransport] = None
         self._bot_transport: Optional[BotTransport] = None
         self._codec: Optional[Codec] = None
@@ -245,14 +249,14 @@ class Client(Methods):
             self._raise_if_not_ok(dc_response)
 
             dc_data = dc_response.get("data", {})
-            api_urls = dc_data.get("default_api_urls", [])
+            api_urls = self._dc_discovery.urls_for(dc_response, DcType.API)
             if not api_urls:
                 raise NetworkError("DC discovery returned no API URLs")
 
             await self.storage.set_api_urls(api_urls)
             await self.storage.set_storages(dc_data.get("storages", {}))
             await self.storage.set_cdn_urls(dc_data.get("default_cdn_urls", {}))
-            await self.storage.set_sockets(dc_data.get("default_sockets", []))
+            await self.storage.set_sockets(self._dc_discovery.urls_for(dc_response, DcType.SOCKET))
 
             self._pool = ApiUrlPool(api_urls)
 
@@ -282,6 +286,10 @@ class Client(Methods):
             if not await self.storage.auth() and self._should_interactive_authorize():
                 await self.authorize()
             if await self.storage.auth():
+                try:
+                    await self._ensure_base_info(force=True)
+                except RubikaError as exc:
+                    log.warning("Base info refresh failed during startup: %s", exc)
                 await self._ensure_socket_handshake()
                 await self._ensure_registered_device()
                 await self._ensure_update_listener()
@@ -354,6 +362,35 @@ class Client(Methods):
             dc_id=getattr(target, "dc_id"),
             access_hash_rec=getattr(target, "access_hash_rec"),
             file_size=self._coerce_download_size(getattr(target, "size", None)),
+            path=destination,
+            in_memory=in_memory,
+            progress=progress,
+            progress_args=progress_args,
+        )
+
+    async def download_url(
+        self,
+        url: str,
+        path: str | Path | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> bytes | Path:
+        if self._download_transport is None:
+            raise TransportError("Download transport is not initialized")
+
+        if in_memory:
+            destination = None
+        else:
+            destination = self._resolve_download_destination(
+                path,
+                file_name or self._default_file_name_from_url(url),
+            )
+
+        return await self._download_transport.download_url(
+            url=url,
             path=destination,
             in_memory=in_memory,
             progress=progress,
@@ -461,6 +498,69 @@ class Client(Methods):
 
     async def invoke(self, method: RawMethod[ResultT]) -> ResultT:
         return await self._invoke_once(method, allow_register_retry=True)
+
+    async def get_rubino_post(
+        self,
+        post_id: Any = None,
+        post_profile_id: Optional[str] = None,
+        *,
+        rubino_post_data: Any = None,
+        track_id: Optional[str] = None,
+    ) -> RubinoPostsResult:
+        if self.is_bot:
+            raise TransportError("Rubino post lookup is not available for bot sessions")
+
+        resolved_post_id, resolved_profile_id = self._resolve_rubino_post_input(
+            post_id=post_id,
+            post_profile_id=post_profile_id,
+            rubino_post_data=rubino_post_data,
+        )
+
+        auth = await self.storage.auth()
+        if not auth:
+            raise LoginRequired("This method requires an authenticated session")
+
+        transport = await self._get_rubino_transport()
+        payload = {
+            "method": "getProfilePosts",
+            "api_version": "0",
+            "data": {
+                "target_profile_id": resolved_profile_id,
+                "max_id": resolved_post_id,
+                "min_id": resolved_post_id,
+                "equal": True,
+                "limit": 1,
+                "sort": "FromMax",
+            },
+            "auth": auth,
+            "client": self._service_client_info(),
+        }
+        response = await transport.send_json(payload)
+        self._raise_if_not_ok(response)
+        data = response.get("data", response)
+        result = RubinoPostsResult._parse(self, data)
+        if result is None:
+            raise TransportError("Rubino post response did not include data")
+        if track_id is not None:
+            setattr(result, "track_id", track_id)
+        return result
+
+    async def get_base_info(self) -> RawObject:
+        if self.is_bot:
+            raise TransportError("Base info lookup is not available for bot sessions")
+        auth = await self.storage.auth()
+        if not auth:
+            raise LoginRequired("This method requires an authenticated session")
+        if self._dc_discovery is None:
+            raise TransportError("DC discovery is not initialized")
+
+        response = await self._dc_discovery.fetch_base_info(auth, self._service_client_info())
+        self._raise_if_not_ok(response)
+        data = response.get("data", response)
+        suggested_urls = data.get("suggested_urls")
+        if isinstance(suggested_urls, dict):
+            await self.storage.set_suggested_urls({str(key): str(value) for key, value in suggested_urls.items() if value})
+        return RawObject._parse(self, data)
 
     async def receive_socket_update(self, timeout: Optional[float] = None) -> SocketUpdates:
         auth = await self.storage.auth()
@@ -874,6 +974,10 @@ class Client(Methods):
             return destination
         return destination / file_name
 
+    def _default_file_name_from_url(self, url: str) -> str:
+        candidate = Path((url or "").rstrip("/")).name
+        return candidate or f"file_{int(time.time())}"
+
     def _coerce_download_size(self, value: Any) -> Optional[int]:
         if value is None:
             return None
@@ -1076,6 +1180,22 @@ class Client(Methods):
             force_reconnect=force_reconnect,
         )
 
+    async def _get_rubino_transport(self) -> JsonTransport:
+        rubino_urls = await self._build_dc_urls(DcType.RUBINO)
+        if not rubino_urls:
+            raise TransportError("No Rubino DC URL found in the discovered DC configuration")
+
+        if self._rubino_transport is None:
+            self._rubino_transport = JsonTransport(rubino_urls, timeout=self.timeout)
+            return self._rubino_transport
+
+        current_urls = list(self._rubino_transport._pool.urls)
+        if current_urls != rubino_urls:
+            await self._rubino_transport.close()
+            self._rubino_transport = JsonTransport(rubino_urls, timeout=self.timeout)
+
+        return self._rubino_transport
+
     async def _ensure_registered_device(self, force: bool = False) -> None:
         if not self.enable_register_device:
             return
@@ -1114,6 +1234,168 @@ class Client(Methods):
             if url and url not in urls:
                 urls.append(url)
         return urls
+
+    async def _build_dc_urls(self, dc_type: DcType | str) -> list[str]:
+        normalized_type = self._normalize_dc_type(dc_type)
+        candidates: list[str] = []
+        for source in (await self.storage.suggested_urls(),):
+            self._collect_suggested_dc_urls(source, normalized_type, candidates)
+        if candidates:
+            return candidates
+
+        if normalized_type == DcType.RUBINO and await self.storage.auth():
+            try:
+                await self._ensure_base_info()
+            except RubikaError as exc:
+                log.warning("Base info lookup failed for %s URLs, falling back to discovered DCs: %s", normalized_type.value, exc)
+            for source in (await self.storage.suggested_urls(),):
+                self._collect_suggested_dc_urls(source, normalized_type, candidates)
+            if candidates:
+                return candidates
+
+        for source in (
+            await self.storage.storages(),
+            await self.storage.cdn_urls(),
+            await self.storage.api_urls(),
+            await self.storage.sockets(),
+        ):
+            self._collect_dc_urls(source, normalized_type, candidates)
+        return candidates
+
+    async def _build_rubino_urls(self) -> list[str]:
+        return await self._build_dc_urls(DcType.RUBINO)
+
+    def _collect_suggested_dc_urls(self, value: Any, dc_type: DcType, output: list[str]) -> None:
+        if not isinstance(value, dict):
+            return
+        key = self._suggested_url_key(dc_type)
+        if key is None:
+            return
+        self._collect_plain_urls(value.get(key), output)
+
+    def _collect_dc_urls(self, value: Any, dc_type: DcType, output: list[str], *, matched: bool = False) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                self._collect_dc_urls(
+                    item,
+                    dc_type,
+                    output,
+                    matched=matched or str(key).strip().lower() == dc_type.value,
+                )
+            return
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                self._collect_dc_urls(item, dc_type, output, matched=matched)
+            return
+        if not isinstance(value, str):
+            return
+
+        if matched:
+            self._append_dc_url(value, output)
+            return
+
+        # Some discovery payloads expose rubino/wallet DCs as direct hostnames rather than typed buckets.
+        self._append_dc_url(value, output, expected_prefix=dc_type.value)
+
+    def _collect_plain_urls(self, value: Any, output: list[str]) -> None:
+        if isinstance(value, dict):
+            for item in value.values():
+                self._collect_plain_urls(item, output)
+            return
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                self._collect_plain_urls(item, output)
+            return
+        if isinstance(value, str):
+            self._append_dc_url(value, output)
+
+    @staticmethod
+    def _append_dc_url(value: str, output: list[str], *, expected_prefix: Optional[str] = None) -> None:
+        from urllib.parse import urlparse
+
+        normalized = value.strip()
+        if not normalized:
+            return
+
+        host = urlparse(normalized).netloc or urlparse(f"https://{normalized}").netloc
+        if not host:
+            return
+        if expected_prefix is not None and (not host.startswith(expected_prefix) or not host.endswith(".iranlms.ir")):
+            return
+
+        url = f"https://{host}"
+        if url not in output:
+            output.append(url)
+
+    @staticmethod
+    def _normalize_dc_type(dc_type: DcType | str) -> DcType:
+        if isinstance(dc_type, DcType):
+            return dc_type
+        return DcType(str(dc_type).strip().lower())
+
+    @staticmethod
+    def _suggested_url_key(dc_type: DcType) -> Optional[str]:
+        return {
+            DcType.API: "suggested_services",
+            DcType.RUBINO: "suggested_rubino",
+            DcType.WALLET: "suggested_payment",
+        }.get(dc_type)
+
+    async def _ensure_base_info(self, force: bool = False) -> Optional[dict[str, str]]:
+        if self._dc_discovery is None:
+            return None
+        if not force:
+            cached = await self.storage.suggested_urls()
+            if cached:
+                return cached
+
+        auth = await self.storage.auth()
+        if not auth:
+            return None
+
+        response = await self._dc_discovery.fetch_base_info(auth, self._service_client_info())
+        self._raise_if_not_ok(response)
+        data = response.get("data", response)
+        suggested_urls = data.get("suggested_urls")
+        normalized = {str(key): str(value) for key, value in suggested_urls.items() if value} if isinstance(suggested_urls, dict) else {}
+        await self.storage.set_suggested_urls(normalized or None)
+        return normalized or None
+
+    def _service_client_info(self) -> dict[str, str]:
+        return {
+            "app_name": self.APP_NAME,
+            "app_version": self.APP_VERSION,
+            "platform": self.PWA_PLATFORM,
+            "package": self.PACKAGE,
+        }
+
+    def _resolve_rubino_post_input(
+        self,
+        *,
+        post_id: Any,
+        post_profile_id: Optional[str],
+        rubino_post_data: Any,
+    ) -> tuple[str, str]:
+        source = rubino_post_data if rubino_post_data is not None else post_id
+        if source is not None and not isinstance(source, str):
+            nested = getattr(source, "rubino_post_data", None)
+            if nested is not None:
+                source = nested
+        if source is not None and not isinstance(source, str):
+            resolved_post_id = getattr(source, "post_id", None)
+            resolved_profile_id = getattr(source, "post_profile_id", None)
+            if resolved_post_id and resolved_profile_id:
+                return str(resolved_post_id), str(resolved_profile_id)
+
+        if rubino_post_data is not None:
+            resolved_post_id = getattr(rubino_post_data, "post_id", None)
+            resolved_profile_id = getattr(rubino_post_data, "post_profile_id", None)
+            if resolved_post_id and resolved_profile_id:
+                return str(resolved_post_id), str(resolved_profile_id)
+
+        if not post_id or not post_profile_id:
+            raise ValueError("Provide post_id and post_profile_id, or pass rubino_post_data/message.rubino_post_data")
+        return str(post_id), str(post_profile_id)
 
     def _raise_if_not_ok(self, payload: dict[str, Any], raw: Optional[dict[str, Any]] = None) -> None:
         status = payload.get("status")
@@ -1212,6 +1494,10 @@ class Client(Methods):
         if self._upload_transport is not None:
             await self._upload_transport.close()
             self._upload_transport = None
+
+        if self._rubino_transport is not None:
+            await self._rubino_transport.close()
+            self._rubino_transport = None
 
         if self._dc_discovery is not None:
             await self._dc_discovery.close()

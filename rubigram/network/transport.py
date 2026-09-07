@@ -5,8 +5,9 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from rubigram.enums import DcType
 from rubigram.exceptions import NetworkError, TransportError
-from rubigram.network.headers import build_rpc_headers
+from rubigram.network.headers import build_discovery_headers, build_rpc_headers
 
 
 class ApiUrlPool:
@@ -178,8 +179,7 @@ class RpcTransport:
         except Exception:
             return False
 
-        data = dc_response.get("data") or {}
-        urls = data.get("default_api_urls") or []
+        urls = self._dc_discovery.urls_for(dc_response, DcType.API)
         if not urls:
             return False
 
@@ -197,6 +197,80 @@ class RpcTransport:
 
     async def fetch_dcs_plain(self) -> Dict[str, Any]:
         return await self._dc_discovery.fetch_dcs()
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    def __del__(self):
+        if self._client is not None and hasattr(self._client, "close"):
+            self._client.close()
+
+
+class JsonTransport:
+    """HTTP transport for plain JSON APIs hosted on Rubika DCs."""
+
+    DEFAULT_TIMEOUT = 20.0
+
+    def __init__(self, urls: List[str], timeout: float = DEFAULT_TIMEOUT):
+        self._pool = ApiUrlPool(urls)
+        self._timeout = timeout
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=self._timeout,
+                headers=build_discovery_headers(),
+            )
+        return self._client
+
+    async def send_json(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        client = await self._get_client()
+        last_error: Exception | None = None
+        attempt_count = max(1, self._pool.count)
+
+        for attempt in range(attempt_count):
+            base_url = self._pool.get_current().rstrip("/")
+            try:
+                response = await client.post(
+                    base_url + "/",
+                    json=payload,
+                )
+                response.raise_for_status()
+                return response.json()
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as e:
+                last_error = e
+                if attempt < attempt_count - 1:
+                    self._pool.rotate()
+                    continue
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                if e.response.status_code >= 500 and attempt < attempt_count - 1:
+                    self._pool.rotate()
+                    continue
+                raise TransportError(
+                    f"HTTP error {e.response.status_code}: {e.response.text}"
+                ) from e
+            break
+
+        if isinstance(last_error, httpx.TimeoutException):
+            raise NetworkError(
+                f"Request to {self._pool.get_current()} timed out after trying available API URLs",
+                last_error,
+            ) from last_error
+        if isinstance(last_error, (httpx.ConnectError, httpx.RequestError)):
+            raise NetworkError(
+                f"Request to {self._pool.get_current()} failed after trying available API URLs",
+                last_error,
+            ) from last_error
+        if isinstance(last_error, httpx.HTTPStatusError):
+            raise TransportError(
+                f"HTTP error {last_error.response.status_code}: {last_error.response.text}"
+            ) from last_error
+
+        raise TransportError("Unexpected error in send_json")
 
     async def close(self) -> None:
         if self._client is not None:

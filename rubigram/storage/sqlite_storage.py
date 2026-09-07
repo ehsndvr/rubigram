@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS session (
     api_version   TEXT NOT NULL,
     api_url       TEXT,
     api_urls_json TEXT,
+    suggested_urls_json TEXT,
     storages_json TEXT,
     cdn_urls_json TEXT,
     sockets_json  TEXT,
@@ -73,11 +74,11 @@ class SQLiteStorage(ABC):
             self.conn.execute(
                 """
                 INSERT OR IGNORE INTO session (
-                    id, api_version, api_url, api_urls_json, storages_json, cdn_urls_json,
+                    id, api_version, api_url, api_urls_json, suggested_urls_json, storages_json, cdn_urls_json,
                     sockets_json, auth, tmp_session, public_key, private_key_pem, user_guid,
                     updates_state, device_hash, registered_device, registered_device_version, bot_token, bot_offset_id, created_at, updated_at
                 ) VALUES (
-                    1, ?, NULL, NULL, NULL, NULL,
+                    1, ?, NULL, NULL, NULL, NULL, NULL,
                     NULL, NULL, NULL, NULL, NULL, NULL,
                     NULL,
                     NULL, 0, NULL, NULL, NULL, ?, ?
@@ -129,11 +130,18 @@ class SQLiteStorage(ABC):
     async def set_api_urls(self, value: Optional[list[str]]) -> None:
         self._set_field("api_urls_json", json.dumps(value) if value is not None else None)
 
-    async def storages(self) -> Optional[dict[str, str]]:
+    async def suggested_urls(self) -> Optional[dict[str, str]]:
+        raw = self._get_field("suggested_urls_json")
+        return json.loads(raw) if raw else None
+
+    async def set_suggested_urls(self, value: Optional[dict[str, str]]) -> None:
+        self._set_field("suggested_urls_json", json.dumps(value) if value is not None else None)
+
+    async def storages(self) -> Optional[dict[str, Any]]:
         raw = self._get_field("storages_json")
         return json.loads(raw) if raw else None
 
-    async def set_storages(self, value: Optional[dict[str, str]]) -> None:
+    async def set_storages(self, value: Optional[dict[str, Any]]) -> None:
         self._set_field("storages_json", json.dumps(value) if value is not None else None)
 
     async def cdn_urls(self) -> Optional[dict[str, list[str]]]:
@@ -222,6 +230,7 @@ class SQLiteStorage(ABC):
             "api_version": await self.api_version(),
             "api_url": await self.api_url(),
             "api_urls": await self.api_urls(),
+            "suggested_urls": await self.suggested_urls(),
             "storages": await self.storages(),
             "cdn_urls": await self.cdn_urls(),
             "sockets": await self.sockets(),
@@ -251,6 +260,8 @@ class SQLiteStorage(ABC):
             await self.set_api_url(data["api_url"])
         if "api_urls" in data:
             await self.set_api_urls(data["api_urls"])
+        if "suggested_urls" in data:
+            await self.set_suggested_urls(data["suggested_urls"])
         if "storages" in data:
             await self.set_storages(data["storages"])
         if "cdn_urls" in data:

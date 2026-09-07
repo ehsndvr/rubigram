@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 
 import rubigram.client as client_module
 from rubigram import filters
+from rubigram.enums import DcType
 from rubigram.enums import GroupAdminAccess, GroupDefaultAccessPermission
 from rubigram.client import Client
 from rubigram.crypto import encrypt_aes_cbc, export_public_key_for_login, rsa_key_generate
@@ -43,9 +44,24 @@ async def fake_fetch_dcs(self):
     }
 
 
+async def fake_fetch_base_info(self, auth, client_info):
+    return {
+        "status": "OK",
+        "status_det": "OK",
+        "data": {
+            "suggested_urls": {
+                "suggested_services": "https://services2.iranlms.ir/",
+                "suggested_rubino": "https://rubino2.iranlms.ir",
+                "suggested_payment": "https://mmegapal.iranlms.ir",
+            }
+        },
+    }
+
+
 def test_client_start_refreshes_dc_config(monkeypatch):
     async def scenario():
         monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_base_info", fake_fetch_base_info)
         client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
         await client.start()
 
@@ -54,6 +70,7 @@ def test_client_start_refreshes_dc_config(monkeypatch):
             "https://messengerg2c466.iranlms.ir",
         ]
         assert await client.storage.api_url() == "https://messengerg2c513.iranlms.ir"
+        assert await client.storage.suggested_urls() is None
 
         await client.stop()
 
@@ -77,6 +94,277 @@ def test_client_start_runs_interactive_authorize_when_needed(monkeypatch):
 
         assert await client.storage.auth() == "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb"
         assert await client.storage.user_guid() == "u0test"
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_client_start_refreshes_base_info_when_auth_exists(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_base_info", fake_fetch_base_info)
+
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.storage.open()
+        await client.storage.set_auth("auth-1")
+        await client.storage.close()
+
+        await client.start()
+
+        assert await client.storage.suggested_urls() == {
+            "suggested_services": "https://services2.iranlms.ir/",
+            "suggested_rubino": "https://rubino2.iranlms.ir",
+            "suggested_payment": "https://mmegapal.iranlms.ir",
+        }
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_get_rubino_post_uses_plain_rubino_dc(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_base_info", fake_fetch_base_info)
+
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("auth-1")
+
+        calls = []
+
+        async def fake_send_json(self, payload):
+            calls.append({"urls": list(self._pool.urls), "payload": payload})
+            return {
+                "status": "OK",
+                "status_det": "OK",
+                "data": {
+                    "posts": [
+                        {
+                            "id": "69b06fee3b7750514a649aa7",
+                            "profile_id": "5f325f3c9dc6d60882e054b2",
+                            "track_id": "Profile",
+                            "file_type": "Video",
+                            "full_file_url": "https://rubino2.iranlms.ir/video/file-1",
+                            "full_thumbnail_url": "https://rubino2.iranlms.ir/picture/thumb-1",
+                            "full_snapshot_url": "https://rubino2.iranlms.ir/picture/snapshot-1",
+                        }
+                    ],
+                    "liked_posts": [],
+                    "bookmarked_posts": [],
+                },
+            }
+
+        monkeypatch.setattr(client_module.JsonTransport, "send_json", fake_send_json)
+
+        result = await client.get_rubino_post(
+            rubino_post_data=type(
+                "RubinoPostDataStub",
+                (),
+                {
+                    "post_id": "69b06fee3b7750514a649aa7",
+                    "post_profile_id": "5f325f3c9dc6d60882e054b2",
+                    "track_id": "Messenger",
+                },
+            )()
+        )
+
+        assert calls == [
+            {
+                "urls": ["https://rubino2.iranlms.ir"],
+                "payload": {
+                    "method": "getProfilePosts",
+                    "api_version": "0",
+                    "data": {
+                        "target_profile_id": "5f325f3c9dc6d60882e054b2",
+                        "max_id": "69b06fee3b7750514a649aa7",
+                        "min_id": "69b06fee3b7750514a649aa7",
+                        "equal": True,
+                        "limit": 1,
+                        "sort": "FromMax",
+                    },
+                    "auth": "auth-1",
+                    "client": {
+                        "app_name": "Main",
+                        "app_version": "4.4.27",
+                        "platform": "PWA",
+                        "package": "web.rubika.ir",
+                    },
+                },
+            }
+        ]
+        assert result.post.id == "69b06fee3b7750514a649aa7"
+        assert result.posts[0].profile_id == "5f325f3c9dc6d60882e054b2"
+        assert result.post.file is not None
+        assert result.post.file.url == "https://rubino2.iranlms.ir/video/file-1"
+        assert result.post.file.file_name == "69b06fee3b7750514a649aa7.mp4"
+        assert result.post.thumbnail is not None
+        assert result.post.thumbnail.file_name == "69b06fee3b7750514a649aa7_thumbnail.jpg"
+        assert await client.storage.suggested_urls() == {
+            "suggested_services": "https://services2.iranlms.ir/",
+            "suggested_rubino": "https://rubino2.iranlms.ir",
+            "suggested_payment": "https://mmegapal.iranlms.ir",
+        }
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_get_base_info_stores_suggested_urls(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_base_info", fake_fetch_base_info)
+
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("auth-1")
+
+        result = await client.get_base_info()
+
+        assert result.suggested_urls.suggested_rubino == "https://rubino2.iranlms.ir"
+        assert await client._build_rubino_urls() == ["https://rubino2.iranlms.ir"]
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_rubino_post_download_helpers_delegate_to_download_url(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_base_info", fake_fetch_base_info)
+
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("auth-1")
+
+        async def fake_send_json(self, payload):
+            return {
+                "status": "OK",
+                "status_det": "OK",
+                "data": {
+                    "posts": [
+                        {
+                            "id": "p1",
+                            "file_type": "Video",
+                            "full_file_url": "https://rubino2.iranlms.ir/video/file-1",
+                            "full_thumbnail_url": "https://rubino2.iranlms.ir/picture/thumb-1",
+                        }
+                    ],
+                    "liked_posts": [],
+                    "bookmarked_posts": [],
+                },
+            }
+
+        download_calls = []
+
+        async def fake_download_url(self, url, path=None, *, in_memory=False, file_name=None, progress=None, progress_args=()):
+            download_calls.append(
+                {
+                    "url": url,
+                    "path": path,
+                    "in_memory": in_memory,
+                    "file_name": file_name,
+                }
+            )
+            return b"data"
+
+        monkeypatch.setattr(client_module.JsonTransport, "send_json", fake_send_json)
+        monkeypatch.setattr(Client, "download_url", fake_download_url)
+
+        result = await client.get_rubino_post(post_id="p1", post_profile_id="pp1")
+        await result.post.download(in_memory=True)
+        await result.post.thumbnail.download(in_memory=True, file_name="thumb.jpg")  # type: ignore[union-attr]
+
+        assert download_calls == [
+            {
+                "url": "https://rubino2.iranlms.ir/video/file-1",
+                "path": None,
+                "in_memory": True,
+                "file_name": "p1.mp4",
+            },
+            {
+                "url": "https://rubino2.iranlms.ir/picture/thumb-1",
+                "path": None,
+                "in_memory": True,
+                "file_name": "thumb.jpg",
+            },
+        ]
+
+        await client.stop()
+
+    asyncio.run(scenario())
+
+
+def test_rubino_post_result_parses_typed_fields(monkeypatch):
+    async def scenario():
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_dcs", fake_fetch_dcs)
+        monkeypatch.setattr(client_module.DcDiscovery, "fetch_base_info", fake_fetch_base_info)
+
+        client = Client("test", in_memory=True, enable_socket_handshake=False, enable_register_device=False)
+        await client.start()
+        await client.storage.set_auth("auth-1")
+
+        async def fake_send_json(self, payload):
+            return {
+                "status": "OK",
+                "status_det": "OK",
+                "data": {
+                    "posts": [
+                        {
+                            "id": "p1",
+                            "profile_id": "profile-1",
+                            "likes_count": 293,
+                            "caption": "caption-1",
+                            "create_date": 1773170670,
+                            "comment_count": 17,
+                            "file_type": "Video",
+                            "post_profile_username": "Aram_rubi7",
+                            "full_post_profile_thumbnail_url": "https://scs444.iranlms.ir/picture/a",
+                            "full_file_url": "https://scs512.iranlms.ir/video/a",
+                            "full_thumbnail_url": "https://scs457.iranlms.ir/picture/b",
+                            "full_snapshot_url": "https://scs457.iranlms.ir/picture/c",
+                            "width": 720,
+                            "height": 720,
+                            "duration": 19,
+                            "allow_show_comment": True,
+                            "most_liked_comment": {
+                                "id": "c1",
+                                "profile_id": "u1",
+                                "content": "hello",
+                            },
+                            "is_for_sale": False,
+                            "is_multi_file": False,
+                            "video_view_count": 43077,
+                            "product_types": [],
+                            "share_url": "https://rubika.ir/post/fPpXxenOiJ",
+                            "file_list": [],
+                            "store_product_ids": [],
+                            "tagged_profiles": [],
+                            "track_id": "Profile",
+                        }
+                    ],
+                    "liked_posts": [],
+                    "bookmarked_posts": [],
+                },
+            }
+
+        monkeypatch.setattr(client_module.JsonTransport, "send_json", fake_send_json)
+
+        result = await client.get_rubino_post(post_id="p1", post_profile_id="profile-1")
+
+        assert result.post is not None
+        assert result.post.caption == "caption-1"
+        assert result.post.likes_count == 293
+        assert result.post.most_liked_comment is not None
+        assert result.post.most_liked_comment.content == "hello"
+        assert result.post.share_url == "https://rubika.ir/post/fPpXxenOiJ"
+        assert result.post.file is not None
+        assert result.post.thumbnail is not None
+        assert result.post.snapshot is not None
+        assert result.post.video_view_count == 43077
 
         await client.stop()
 

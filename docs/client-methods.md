@@ -159,6 +159,44 @@ Common nested payload:
 Download helpers:
 - `await result.objects[i].avatar_thumbnail.download(...)`
 
+### `await app.get_rubino_post(post_id=None, post_profile_id=None, *, rubino_post_data=None, track_id=None) -> RawObject`
+Fetches a single Rubino post payload from the Rubino DC in the discovered DC list.
+
+Input:
+- pass `post_id` and `post_profile_id`, or pass `rubino_post_data=message.rubino_post_data`
+- `track_id` is accepted for convenience when you are calling this from a `RubinoPost` message, but it is not required by the upstream request
+
+Request behavior:
+- uses plain JSON `getProfilePosts`
+- resolves the Rubino host from plain JSON `getBaseInfo` on `https://servicesbase.iranlms.ir/`
+- targets the suggested Rubino host from `suggested_urls.suggested_rubino`, for example `https://rubino2.iranlms.ir/`
+- sends `equal=True`, `limit=1`, `sort="FromMax"`, with `min_id == max_id == post_id`
+
+Returned object:
+- `result.posts`
+- `result.post` as a convenience alias for `result.posts[0]` when present
+- `result.liked_posts`
+- `result.bookmarked_posts`
+
+Download helpers:
+- `await result.post.download(...)` downloads the main media when available
+- `await result.post.thumbnail.download(...)`
+- `await result.post.snapshot.download(...)`
+- `await result.post.file.download(...)`
+- `await result.post.file_list[i].download(...)` for multi-file posts when file URLs are present
+
+### `await app.get_base_info() -> RawObject`
+Fetches plain JSON `getBaseInfo` from `https://servicesbase.iranlms.ir/` using the authenticated session.
+
+Returned object commonly includes:
+- `result.suggested_urls`
+- `result.update`
+- `result.start_popup`
+
+Notes:
+- `suggested_urls` is cached in session storage
+- Rubigram uses this response to resolve the current Rubino base URL
+
 ### `await app.get_avatars(object_guid: str) -> ChatAvatars`
 Returns avatars for a user or chat.
 

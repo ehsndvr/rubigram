@@ -127,6 +127,62 @@ class DownloadTransport:
         assert output_path is not None
         return output_path
 
+    async def download_url(
+        self,
+        *,
+        url: str,
+        path: str | Path | None = None,
+        in_memory: bool = False,
+        progress: Optional[Callable[..., Any]] = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> bytes | Path:
+        if not url:
+            raise TransportError("Downloading a file requires a URL")
+
+        client = await self._get_client()
+        output_path: Path | None = None
+        file_handle = None
+        downloaded = 0
+        total: int | None = None
+        chunks: list[bytes] = []
+
+        try:
+            if not in_memory:
+                if path is None:
+                    raise TransportError("Downloading to disk requires a destination path")
+                output_path = Path(path)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                file_handle = output_path.open("wb")
+
+            try:
+                async with client.stream("GET", url) as response:
+                    response.raise_for_status()
+                    header_length = response.headers.get("content-length")
+                    total = int(header_length) if header_length and header_length.isdigit() else None
+
+                    async for chunk in response.aiter_bytes(self._chunk_size):
+                        if not chunk:
+                            continue
+                        if in_memory:
+                            chunks.append(chunk)
+                        else:
+                            assert file_handle is not None
+                            file_handle.write(chunk)
+                        downloaded += len(chunk)
+                        await _report_progress(progress, downloaded, total or downloaded, progress_args)
+            except httpx.RequestError as e:
+                raise NetworkError(f"Download from {url} failed: {e}", e) from e
+            except httpx.HTTPStatusError as e:
+                raise TransportError(f"Download failed with HTTP {e.response.status_code}: {e.response.text}") from e
+        finally:
+            if file_handle is not None:
+                file_handle.close()
+
+        if in_memory:
+            return b"".join(chunks)
+        assert output_path is not None
+        return output_path
+
     async def close(self) -> None:
         if self._client is not None:
             await self._client.aclose()

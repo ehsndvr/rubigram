@@ -3,8 +3,9 @@ from pathlib import Path
 
 import httpx
 
+from rubigram.enums import DcType
 from rubigram.network.discovery import DcDiscovery
-from rubigram.network.transport import ApiUrlPool, RpcTransport
+from rubigram.network.transport import ApiUrlPool, JsonTransport, RpcTransport
 from rubigram.network.download import DownloadTransport
 from rubigram.network.upload import UploadTransport
 from rubigram.types import UploadDescriptor
@@ -21,6 +22,30 @@ class StubAsyncClient:
         if isinstance(action, Exception):
             raise action
         return action
+
+    def stream(self, method, url, **kwargs):
+        self.calls.append({"method": method, "url": url, **kwargs})
+        action = self.actions.pop(0)
+        if isinstance(action, Exception):
+            raise action
+
+        class _StreamContext:
+            def __init__(self, response):
+                self._response = response
+
+            async def __aenter__(self):
+                async def _aiter_bytes(chunk_size):
+                    content = self._response.content
+                    for index in range(0, len(content), chunk_size):
+                        yield content[index:index + chunk_size]
+
+                setattr(self._response, "aiter_bytes", _aiter_bytes)
+                return self._response
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+        return _StreamContext(action)
 
     async def aclose(self):
         return None
@@ -76,6 +101,10 @@ def test_transport_refreshes_pool_after_502():
                         ]
                     }
                 }
+
+            @staticmethod
+            def urls_for(payload, dc_type):
+                return DcDiscovery.urls_for(payload, dc_type)
 
         pool = ApiUrlPool(["https://messengerg2c597.iranlms.ir"])
         transport = RpcTransport(StubDiscovery(), pool)
@@ -160,6 +189,91 @@ def test_upload_transport_reports_progress():
     asyncio.run(scenario())
 
 
+def test_dc_discovery_urls_for_supports_typed_dc_kinds():
+    payload = {
+        "data": {
+            "default_api_urls": [
+                "https://messengerg2c777.iranlms.ir",
+                "messengerg2c888.iranlms.ir",
+            ],
+            "default_sockets": [
+                "wss://nsocket10.iranlms.ir:80/",
+            ],
+            "storages": {
+                DcType.RUBINO.value: [
+                    "https://rubino16.iranlms.ir",
+                    "rubino20.iranlms.ir",
+                ],
+                DcType.WALLET.value: ["wallet42.iranlms.ir"],
+            },
+        }
+    }
+
+    assert DcDiscovery.urls_for(payload, DcType.API) == [
+        "https://messengerg2c777.iranlms.ir",
+        "https://messengerg2c888.iranlms.ir",
+    ]
+    assert DcDiscovery.urls_for(payload, DcType.SOCKET) == [
+        "https://nsocket10.iranlms.ir:80",
+    ]
+    assert DcDiscovery.urls_for(payload, DcType.RUBINO) == [
+        "https://rubino16.iranlms.ir",
+        "https://rubino20.iranlms.ir",
+    ]
+    assert DcDiscovery.urls_for(payload, DcType.WALLET) == [
+        "https://wallet42.iranlms.ir",
+    ]
+
+
+def test_dc_discovery_suggested_urls_for_supports_base_info_payload():
+    payload = {
+        "data": {
+            "suggested_urls": {
+                "suggested_services": "https://services2.iranlms.ir/",
+                "suggested_rubino": "https://rubino2.iranlms.ir",
+                "suggested_payment": "https://mmegapal.iranlms.ir",
+            }
+        }
+    }
+
+    assert DcDiscovery.suggested_urls_for(payload, DcType.API) == [
+        "https://services2.iranlms.ir",
+    ]
+    assert DcDiscovery.suggested_urls_for(payload, DcType.RUBINO) == [
+        "https://rubino2.iranlms.ir",
+    ]
+    assert DcDiscovery.suggested_urls_for(payload, DcType.WALLET) == [
+        "https://mmegapal.iranlms.ir",
+    ]
+
+
+def test_json_transport_failover_uses_json_body():
+    async def scenario():
+        transport = JsonTransport(
+            [
+                "https://rubino16.iranlms.ir",
+                "https://rubino20.iranlms.ir",
+            ]
+        )
+        transport._client = StubAsyncClient(
+            [
+                httpx.ConnectError("boom"),
+                _response(200, {"status": "OK", "status_det": "OK", "data": {"posts": []}}),
+            ]
+        )
+
+        result = await transport.send_json({"method": "getProfilePosts"})
+
+        assert result["status"] == "OK"
+        assert transport._client.calls[0]["url"] == "https://rubino16.iranlms.ir/"
+        assert transport._client.calls[1]["url"] == "https://rubino20.iranlms.ir/"
+        assert transport._client.calls[0]["json"] == {"method": "getProfilePosts"}
+
+        await transport.close()
+
+    asyncio.run(scenario())
+
+
 
 def test_download_transport_reports_progress():
     async def scenario():
@@ -186,6 +300,26 @@ def test_download_transport_reports_progress():
 
         assert result == b"abcdef"
         assert progress_calls == [(4, 6, "download"), (6, 6, "download")]
+
+        await transport.close()
+
+    asyncio.run(scenario())
+
+
+def test_download_transport_downloads_direct_url():
+    async def scenario():
+        transport = DownloadTransport(chunk_size=3)
+        transport._client = StubAsyncClient([
+            _response(200, text="abcdef"),
+        ])
+
+        result = await transport.download_url(
+            url="https://rubino2.iranlms.ir/video/file-1",
+            in_memory=True,
+        )
+
+        assert result == b"abcdef"
+        assert transport._client.calls[0]["url"] == "https://rubino2.iranlms.ir/video/file-1"
 
         await transport.close()
 

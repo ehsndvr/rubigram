@@ -49,6 +49,7 @@ from rubigram import Client, filters, raw, types
 
 Examples:
 - `await app.get_me()`
+- `await app.get_rubino_post(...)`
 - `await app.send_message(...)`
 - `await app.send_photo(...)`
 - `await app.send_document(...)`

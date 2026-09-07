@@ -36,6 +36,7 @@ class FileStorage(SQLiteStorage):
                     api_version TEXT NOT NULL,
                     api_url TEXT,
                     api_urls_json TEXT,
+                    suggested_urls_json TEXT,
                     storages_json TEXT,
                     cdn_urls_json TEXT,
                     sockets_json TEXT,
@@ -53,6 +54,8 @@ class FileStorage(SQLiteStorage):
                 );
                 """)
                 columns = {row[1] for row in self.conn.execute("PRAGMA table_info(session)").fetchall()}
+                if "suggested_urls_json" not in columns:
+                    self.conn.execute("ALTER TABLE session ADD COLUMN suggested_urls_json TEXT")
                 if "public_key" not in columns:
                     self.conn.execute("ALTER TABLE session ADD COLUMN public_key TEXT")
                 if "private_key_pem" not in columns:

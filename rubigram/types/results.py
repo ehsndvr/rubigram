@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from .object import Object
@@ -38,6 +39,28 @@ async def _download_bound_file(
         path=path,
         in_memory=in_memory,
         file_name=file_name,
+        progress=progress,
+        progress_args=progress_args,
+    )
+
+
+async def _download_bound_url(
+    target: Object,
+    *,
+    path: str | None = None,
+    in_memory: bool = False,
+    file_name: Optional[str] = None,
+    progress: Any = None,
+    progress_args: tuple[Any, ...] = (),
+    missing_message: str,
+) -> Any:
+    if target._client is None:
+        raise RuntimeError(missing_message)
+    return await target._client.download_url(
+        getattr(target, "url"),
+        path=path,
+        in_memory=in_memory,
+        file_name=file_name or getattr(target, "file_name", None),
         progress=progress,
         progress_args=progress_args,
     )
@@ -227,6 +250,297 @@ class Sticker(RawObject):
 
 class RubinoPostData(RawObject):
     pass
+
+
+class UrlFile(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        url: Optional[str] = None,
+        file_name: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.url = url
+        self.file_name = file_name
+
+    @classmethod
+    def from_url(cls, client: Any, url: Optional[str], *, file_name: Optional[str] = None) -> Optional["UrlFile"]:
+        if not url:
+            return None
+        return cls(
+            client=client,
+            url=url,
+            file_name=file_name or Path(str(url).rstrip("/")).name or None,
+        )
+
+    async def download(
+        self,
+        path: str | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+    ) -> Any:
+        return await _download_bound_url(
+            self,
+            path=path,
+            in_memory=in_memory,
+            file_name=file_name,
+            progress=progress,
+            progress_args=progress_args,
+            missing_message="This URL file is not bound to a Client instance",
+        )
+
+
+class RubinoPostMedia(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        full_file_url: Optional[str] = None,
+        full_thumbnail_url: Optional[str] = None,
+        full_snapshot_url: Optional[str] = None,
+        file: Optional[UrlFile] = None,
+        thumbnail: Optional[UrlFile] = None,
+        snapshot: Optional[UrlFile] = None,
+    ):
+        super().__init__(client)
+        self.full_file_url = full_file_url
+        self.full_thumbnail_url = full_thumbnail_url
+        self.full_snapshot_url = full_snapshot_url
+        self.file = file
+        self.thumbnail = thumbnail
+        self.snapshot = snapshot
+
+    @classmethod
+    def _parse(cls, client: Any, data: Any) -> Any:
+        if data is None:
+            return None
+        if isinstance(data, list):
+            return [cls._parse(client, item) for item in data]
+        if not isinstance(data, dict):
+            return data
+
+        result = cls(
+            client=client,
+            full_file_url=data.get("full_file_url"),
+            full_thumbnail_url=data.get("full_thumbnail_url"),
+            full_snapshot_url=data.get("full_snapshot_url"),
+            file=UrlFile.from_url(client, data.get("full_file_url"), file_name=_rubino_default_name(data, kind="file")),
+            thumbnail=UrlFile.from_url(client, data.get("full_thumbnail_url"), file_name=_rubino_default_name(data, kind="thumbnail")),
+            snapshot=UrlFile.from_url(client, data.get("full_snapshot_url"), file_name=_rubino_default_name(data, kind="snapshot")),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+    async def download(
+        self,
+        path: str | None = None,
+        *,
+        in_memory: bool = False,
+        file_name: Optional[str] = None,
+        progress: Any = None,
+        progress_args: tuple[Any, ...] = (),
+        kind: str = "file",
+    ) -> Any:
+        target = {
+            "file": self.file,
+            "thumbnail": self.thumbnail,
+            "snapshot": self.snapshot,
+        }.get(kind)
+        if target is None:
+            raise RuntimeError(f"This Rubino media does not contain downloadable {kind} data")
+        return await target.download(
+            path=path,
+            in_memory=in_memory,
+            file_name=file_name,
+            progress=progress,
+            progress_args=progress_args,
+        )
+
+
+class RubinoPost(RubinoPostMedia):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        full_file_url: Optional[str] = None,
+        full_thumbnail_url: Optional[str] = None,
+        full_snapshot_url: Optional[str] = None,
+        file: Optional[UrlFile] = None,
+        thumbnail: Optional[UrlFile] = None,
+        snapshot: Optional[UrlFile] = None,
+        id: Optional[str] = None,
+        profile_id: Optional[str] = None,
+        likes_count: Optional[int] = None,
+        caption: Optional[str] = None,
+        create_date: Optional[int] = None,
+        comment_count: Optional[int] = None,
+        file_type: Optional[str] = None,
+        post_profile_username: Optional[str] = None,
+        full_post_profile_thumbnail_url: Optional[str] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        duration: Optional[int] = None,
+        allow_show_comment: Optional[bool] = None,
+        most_liked_comment: Optional[RawObject] = None,
+        is_for_sale: Optional[bool] = None,
+        sale_price: Any = None,
+        is_multi_file: Optional[bool] = None,
+        video_view_count: Optional[int] = None,
+        product_types: Optional[list[Any]] = None,
+        share_url: Optional[str] = None,
+        file_list: Optional[list[RubinoPostMedia]] = None,
+        sponsored_text: Any = None,
+        store_product_ids: Optional[list[Any]] = None,
+        profile_store_id: Any = None,
+        tagged_profiles: Optional[list[Any]] = None,
+        show_type: Any = None,
+        post_profile_is_verified: Any = None,
+        track_id: Optional[str] = None,
+    ):
+        super().__init__(
+            client=client,
+            full_file_url=full_file_url,
+            full_thumbnail_url=full_thumbnail_url,
+            full_snapshot_url=full_snapshot_url,
+            file=file,
+            thumbnail=thumbnail,
+            snapshot=snapshot,
+        )
+        self.id = id
+        self.profile_id = profile_id
+        self.likes_count = likes_count
+        self.caption = caption
+        self.create_date = create_date
+        self.comment_count = comment_count
+        self.file_type = file_type
+        self.post_profile_username = post_profile_username
+        self.full_post_profile_thumbnail_url = full_post_profile_thumbnail_url
+        self.width = width
+        self.height = height
+        self.duration = duration
+        self.allow_show_comment = allow_show_comment
+        self.most_liked_comment = most_liked_comment
+        self.is_for_sale = is_for_sale
+        self.sale_price = sale_price
+        self.is_multi_file = is_multi_file
+        self.video_view_count = video_view_count
+        self.product_types = product_types or []
+        self.share_url = share_url
+        self.file_list = file_list or []
+        self.sponsored_text = sponsored_text
+        self.store_product_ids = store_product_ids or []
+        self.profile_store_id = profile_store_id
+        self.tagged_profiles = tagged_profiles or []
+        self.show_type = show_type
+        self.post_profile_is_verified = post_profile_is_verified
+        self.track_id = track_id
+
+    @classmethod
+    def _parse(cls, client: Any, data: Any) -> Any:
+        if data is None:
+            return None
+        if isinstance(data, list):
+            return [cls._parse(client, item) for item in data]
+        if not isinstance(data, dict):
+            return data
+
+        result = cls(
+            client=client,
+            full_file_url=data.get("full_file_url"),
+            full_thumbnail_url=data.get("full_thumbnail_url"),
+            full_snapshot_url=data.get("full_snapshot_url"),
+            file=UrlFile.from_url(client, data.get("full_file_url"), file_name=_rubino_default_name(data, kind="file")),
+            thumbnail=UrlFile.from_url(client, data.get("full_thumbnail_url"), file_name=_rubino_default_name(data, kind="thumbnail")),
+            snapshot=UrlFile.from_url(client, data.get("full_snapshot_url"), file_name=_rubino_default_name(data, kind="snapshot")),
+            id=data.get("id"),
+            profile_id=data.get("profile_id"),
+            likes_count=data.get("likes_count"),
+            caption=data.get("caption"),
+            create_date=data.get("create_date"),
+            comment_count=data.get("comment_count"),
+            file_type=data.get("file_type"),
+            post_profile_username=data.get("post_profile_username"),
+            full_post_profile_thumbnail_url=data.get("full_post_profile_thumbnail_url"),
+            width=data.get("width"),
+            height=data.get("height"),
+            duration=data.get("duration"),
+            allow_show_comment=data.get("allow_show_comment"),
+            most_liked_comment=RawObject._parse(client, data.get("most_liked_comment")),
+            is_for_sale=data.get("is_for_sale"),
+            sale_price=data.get("sale_price"),
+            is_multi_file=data.get("is_multi_file"),
+            video_view_count=data.get("video_view_count"),
+            product_types=_parse_dynamic(client, data.get("product_types") or []),
+            share_url=data.get("share_url"),
+            file_list=RubinoPostMedia._parse(client, data.get("file_list")) or [],
+            sponsored_text=_parse_dynamic(client, data.get("sponsored_text")),
+            store_product_ids=_parse_dynamic(client, data.get("store_product_ids") or []),
+            profile_store_id=_parse_dynamic(client, data.get("profile_store_id")),
+            tagged_profiles=_parse_dynamic(client, data.get("tagged_profiles") or []),
+            show_type=_parse_dynamic(client, data.get("show_type")),
+            post_profile_is_verified=_parse_dynamic(client, data.get("post_profile_is_verified")),
+            track_id=data.get("track_id"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+class RubinoPostsResult(Object):
+    def __init__(
+        self,
+        *,
+        client: Any = None,
+        posts: Optional[list[RubinoPost]] = None,
+        liked_posts: Optional[list[Any]] = None,
+        bookmarked_posts: Optional[list[Any]] = None,
+        post: Optional[RubinoPost] = None,
+        track_id: Optional[str] = None,
+    ):
+        super().__init__(client)
+        self.posts = posts or []
+        self.liked_posts = liked_posts or []
+        self.bookmarked_posts = bookmarked_posts or []
+        self.post = post
+        self.track_id = track_id
+
+    @classmethod
+    def _parse(cls, client: Any, data: Optional[dict[str, Any]]) -> Optional["RubinoPostsResult"]:
+        if data is None:
+            return None
+        posts = RubinoPost._parse(client, data.get("posts")) or []
+        result = cls(
+            client=client,
+            posts=posts,
+            liked_posts=_parse_dynamic(client, data.get("liked_posts") or []),
+            bookmarked_posts=_parse_dynamic(client, data.get("bookmarked_posts") or []),
+            post=RubinoPost._parse(client, data.get("post")) or (posts[0] if posts else None),
+            track_id=data.get("track_id"),
+        )
+        _apply_unknown_fields(result, client, data, result.__dict__.keys())
+        return result
+
+
+def _rubino_default_name(data: dict[str, Any], *, kind: str) -> Optional[str]:
+    post_id = data.get("id") or data.get("post_id")
+    file_type = str(data.get("file_type") or "").lower()
+    if not post_id:
+        return None
+    if kind == "thumbnail":
+        return f"{post_id}_thumbnail.jpg"
+    if kind == "snapshot":
+        return f"{post_id}_snapshot.jpg"
+    extension = {
+        "video": ".mp4",
+        "image": ".jpg",
+        "gif": ".gif",
+        "audio": ".mp3",
+        "voice": ".ogg",
+    }.get(file_type, "")
+    return f"{post_id}{extension}"
 
 
 class LiveStatus(RawObject):
