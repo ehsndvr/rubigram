@@ -1,46 +1,32 @@
+"""Login, device registration and session RPCs."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import Any, Dict, Optional
 
 from rubigram.raw.base import RawMethod
-from rubigram.types import Authorization, Empty, SentCode
-
-if TYPE_CHECKING:
-    import rubigram
+from rubigram.types import Authorization, Empty, MySessions, SentCode, TimeResult, UnconfirmedSessions
 
 
 @dataclass
 class SendCode(RawMethod[SentCode]):
-    """
-    Send a verification code to a phone number.
+    """Send a login code; needs a temporary session (``tmp_session``)."""
 
-    This method requires a temporary session (tmp_session).
-    """
     phone_number: str
     send_type: str = "SMS"
+    pass_key: Optional[str] = None
 
     method_name = "sendCode"
     auth_mode = "tmp"
-
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "phone_number": self.phone_number,
-            "send_type": self.send_type,
-        }
-
-    def parse_response(self, client: "rubigram.Client", data: Any) -> SentCode:
-        return SentCode._parse(client, data)
+    api_version = "6"
+    result = SentCode
 
 
 @dataclass
 class SignIn(RawMethod[Authorization]):
-    """
-    Sign in with a phone number, code hash, and verification code.
+    """Confirm the code; the response carries the new ``auth`` (RSA-encrypted)."""
 
-    This method requires a temporary session (tmp_session).
-
-    Upon success, the response contains a new 'auth' key that must be
-    unwrapped and saved to the session.
-    """
     phone_number: str
     phone_code_hash: str
     phone_code: str
@@ -48,51 +34,47 @@ class SignIn(RawMethod[Authorization]):
 
     method_name = "signIn"
     auth_mode = "tmp"
+    api_version = "6"
     unwrap_auth_on_success = True
-
-    def to_input(self) -> Dict[str, Any]:
-        input_data = {
-            "phone_number": self.phone_number,
-            "phone_code_hash": self.phone_code_hash,
-            "phone_code": self.phone_code,
-        }
-        if self.public_key:
-            input_data["public_key"] = self.public_key
-        return input_data
-
-    def parse_response(self, client: "rubigram.Client", data: Any) -> Authorization:
-        return Authorization._parse(client, data)
+    result = Authorization
 
 
 @dataclass
 class SignUp(RawMethod[Authorization]):
-    """
-    Sign up with a new account (typically after signIn).
+    """Register a new account after ``signIn`` reported it does not exist.
 
-    This method requires a temporary session (tmp_session).
-
-    Upon success, the response contains a new 'auth' key that must be
-    unwrapped and saved to the session.
+    Not used by the web client (kept from rubigram 0.1; unverified against the
+    current server).
     """
+
     first_name: str
     last_name: Optional[str] = ""
     public_key: Optional[str] = None
 
     method_name = "signUp"
     auth_mode = "tmp"
+    api_version = "6"
     unwrap_auth_on_success = True
+    result = Authorization
 
-    def to_input(self) -> Dict[str, Any]:
-        input_data = {
-            "first_name": self.first_name,
-            "last_name": self.last_name,
-        }
-        if self.public_key:
-            input_data["public_key"] = self.public_key
-        return input_data
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> Authorization:
-        return Authorization._parse(client, data)
+@dataclass
+class LoginTwoStepForgetPassword(RawMethod[Any]):
+    phone_number: str
+
+    method_name = "loginTwoStepForgetPassword"
+    auth_mode = "tmp"
+
+
+@dataclass
+class LoginDisableTwoStep(RawMethod[Any]):
+    phone_number: str
+    phone_code_hash: Optional[str] = None
+    phone_code: Optional[str] = None
+    email_code: Optional[str] = None
+
+    method_name = "loginDisableTwoStep"
+    auth_mode = "tmp"
 
 
 @dataclass
@@ -106,17 +88,85 @@ class RegisterDevice(RawMethod[Empty]):
     device_hash: str
 
     method_name = "registerDevice"
+    result = Empty
+
+
+@dataclass
+class UnregisterDevice(RawMethod[Empty]):
+    """Sent unencrypted (plain JSON with ``auth``) like the web client does."""
+
+    device: Optional[Dict[str, Any]] = None
+
+    method_name = "unregisterDevice"
+    auth_mode = "none"
+    api_version = "4"
+    result = Empty
 
     def to_input(self) -> Dict[str, Any]:
-        return {
-            "token_type": self.token_type,
-            "token": self.token,
-            "app_version": self.app_version,
-            "lang_code": self.lang_code,
-            "system_version": self.system_version,
-            "device_model": self.device_model,
-            "device_hash": self.device_hash,
-        }
+        return dict(self.device or {})
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> Empty:
-        return Empty._parse(client, data or {})
+
+@dataclass
+class Logout(RawMethod[Empty]):
+    method_name = "logout"
+    result = Empty
+
+
+@dataclass
+class GetTime(RawMethod[TimeResult]):
+    method_name = "getTime"
+    retries = 3
+    result = TimeResult
+
+
+@dataclass
+class GetMySessions(RawMethod[MySessions]):
+    method_name = "getMySessions"
+    result = MySessions
+
+
+@dataclass
+class TerminateSession(RawMethod[Empty]):
+    session_key: str
+
+    method_name = "terminateSession"
+    result = Empty
+
+
+@dataclass
+class TerminateOtherSessions(RawMethod[Empty]):
+    method_name = "terminateOtherSessions"
+    result = Empty
+
+
+@dataclass
+class GetUnconfirmedSessions(RawMethod[UnconfirmedSessions]):
+    method_name = "getUnconfirmedSessions"
+    result = UnconfirmedSessions
+
+
+@dataclass
+class ActionOnUnconfirmedSession(RawMethod[Empty]):
+    unconfirmed_session_key: str
+    action: str
+
+    method_name = "actionOnUnconfirmedSession"
+    result = Empty
+
+
+__all__ = [
+    "SendCode",
+    "SignIn",
+    "SignUp",
+    "LoginTwoStepForgetPassword",
+    "LoginDisableTwoStep",
+    "RegisterDevice",
+    "UnregisterDevice",
+    "Logout",
+    "GetTime",
+    "GetMySessions",
+    "TerminateSession",
+    "TerminateOtherSessions",
+    "GetUnconfirmedSessions",
+    "ActionOnUnconfirmedSession",
+]

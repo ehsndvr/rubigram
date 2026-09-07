@@ -1,101 +1,41 @@
-from rubigram.raw.methods.auth import (
-    RegisterDevice,
-    SendCode,
-    SignIn,
-    SignUp,
-)
-from rubigram.raw.methods.channels import AddChannel, AddChannelMembers, EditChannelInfo, GetBannedChannelMembers, GetChannelAdminMembers, GetChannelAllMembers, GetChannelInfo, GetChannelLink, SetChannelAdmin
-from rubigram.raw.methods.files import RequestSendFile
-from rubigram.raw.methods.groups import (
-    AddGroup,
-    AddGroupMembers,
-    BanGroupMember,
-    CreateJoinLink,
-    EditGroupInfo,
-    SetGroupAdmin,
-    SetGroupDefaultAccess,
-    GetGroupInfo,
-    GetGroupAllMembers,
-    GetGroupDefaultAccess,
-    GetGroupLink,
-    GetJoinLinks,
-    GetPendingObjectOwner,
-    RequestChangeObjectOwner,
-    RemoveGroup,
-    UploadNewGroupAvatar,
-)
-from rubigram.raw.methods.messages import (
-    SendMessage,
-    EditMessage,
-    DeleteMessage,
-    DeleteChatHistory,
-    SendChatActivity,
-    GetMessages,
-    GetHistory,
-    GetChat,
-)
-from rubigram.raw.methods.updates import GetAvailableReactions, GetChatsUpdates, GetContactsUpdates
-from rubigram.raw.methods.users import (
-    GetUserInfo,
-    GetObjectByUsername,
-    GetAvatars,
-    BlockUser,
-    UnblockUser,
-    GetContacts,
-    GetContactsLastOnline,
-    GetProfileLinkItems,
-    SearchGlobalObjects,
-)
+"""Every raw RPC method, plus a registry keyed by the Rubika method name."""
 
-__all__ = [
-    "SendCode",
-    "SignIn",
-    "SignUp",
-    "RegisterDevice",
-    "RequestSendFile",
-    "AddChannel",
-    "AddChannelMembers",
-    "EditChannelInfo",
-    "GetBannedChannelMembers",
-    "GetChannelAdminMembers",
-    "GetChannelLink",
-    "GetChannelInfo",
-    "GetChannelAllMembers",
-    "SetChannelAdmin",
-    "AddGroup",
-    "AddGroupMembers",
-    "BanGroupMember",
-    "CreateJoinLink",
-    "EditGroupInfo",
-    "SetGroupAdmin",
-    "SetGroupDefaultAccess",
-    "GetGroupInfo",
-    "GetGroupAllMembers",
-    "GetGroupDefaultAccess",
-    "GetGroupLink",
-    "GetJoinLinks",
-    "GetPendingObjectOwner",
-    "RequestChangeObjectOwner",
-    "RemoveGroup",
-    "UploadNewGroupAvatar",
-    "SendMessage",
-    "EditMessage",
-    "DeleteMessage",
-    "DeleteChatHistory",
-    "SendChatActivity",
-    "GetMessages",
-    "GetHistory",
-    "GetChat",
-    "GetChatsUpdates",
-    "GetContactsUpdates",
-    "GetAvailableReactions",
-    "GetUserInfo",
-    "GetObjectByUsername",
-    "GetAvatars",
-    "BlockUser",
-    "UnblockUser",
-    "GetContacts",
-    "GetContactsLastOnline",
-    "GetProfileLinkItems",
-    "SearchGlobalObjects",
-]
+from __future__ import annotations
+
+from typing import Dict, Type
+
+from rubigram.raw.base import RawMethod
+from rubigram.raw.methods import auth, channels, chats, files, groups, messages, services, settings, stickers, users
+from rubigram.raw.methods.auth import *  # noqa: F401,F403
+from rubigram.raw.methods.channels import *  # noqa: F401,F403
+from rubigram.raw.methods.chats import *  # noqa: F401,F403
+from rubigram.raw.methods.files import *  # noqa: F401,F403
+from rubigram.raw.methods.groups import *  # noqa: F401,F403
+from rubigram.raw.methods.messages import *  # noqa: F401,F403
+from rubigram.raw.methods.services import *  # noqa: F401,F403
+from rubigram.raw.methods.settings import *  # noqa: F401,F403
+from rubigram.raw.methods.stickers import *  # noqa: F401,F403
+from rubigram.raw.methods.users import *  # noqa: F401,F403
+
+_MODULES = (auth, users, chats, messages, groups, channels, files, stickers, settings, services)
+
+__all__ = [name for module in _MODULES for name in module.__all__] + ["METHODS", "method_for"]
+
+
+def _build_registry() -> Dict[str, Type[RawMethod]]:
+    registry: Dict[str, Type[RawMethod]] = {}
+    for module in _MODULES:
+        for name in module.__all__:
+            cls = getattr(module, name)
+            if isinstance(cls, type) and issubclass(cls, RawMethod) and cls.method_name:
+                # The first (canonical) class wins; deprecated aliases come after it.
+                registry.setdefault(cls.method_name, cls)
+    return registry
+
+
+METHODS: Dict[str, Type[RawMethod]] = _build_registry()
+
+
+def method_for(method_name: str) -> Type[RawMethod]:
+    """Return the raw class for a Rubika method name (``KeyError`` when unknown)."""
+    return METHODS[method_name]
