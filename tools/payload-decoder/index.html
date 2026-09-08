@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rubigram Decoder UI</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-top">
+          <p class="eyebrow">Rubika Traffic Decoder</p>
+          <div class="hero-chip">Local UI • Offline-friendly</div>
+        </div>
+        <h1>
+          <span class="latin">Rubika Payload Decoder</span>
+          <span class="farsi">برای بررسی ترافیک رمز‌شده</span>
+        </h1>
+        <p class="lede">
+          payload را وارد کن، auth را در صورت نیاز بده، و خروجی decode شده را با چیدمان خوانا و مستقیم ببین.
+        </p>
+      </section>
+
+      <section class="grid">
+        <form id="decoder-form" class="panel controls">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">ورودی</p>
+              <h2>Decode Settings</h2>
+            </div>
+            <div class="panel-badge">AES-CBC</div>
+          </div>
+
+          <label class="field">
+            <span>نوع کلید</span>
+            <select id="key-mode">
+              <option value="raw" selected>auth واقعی</option>
+              <option value="encoded-auth">auth روی wire (caesar-encoded)</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>auth</span>
+            <input id="session-key" type="text" placeholder="اگر payload خودش auth یا tmp_session داشته باشد، این فیلد نادیده گرفته می‌شود">
+          </label>
+
+          <label class="field">
+            <span>Payload JSON</span>
+            <textarea id="payload-input" spellcheck="false" placeholder='{"data_enc":"..."}'></textarea>
+          </label>
+
+          <div class="actions">
+            <button type="submit" class="primary">Decode</button>
+            <button type="button" id="fill-sample">Sample</button>
+            <button type="button" id="clear-form">Clear</button>
+          </div>
+
+          <div class="hint-list">
+            <p>اگر فقط `data_enc` را داری، همان را داخل JSON بگذار.</p>
+            <p>اگر payload شامل `auth` باشد، همان `auth` روی wire decode می‌شود و از مقدار دستی جلوتر است.</p>
+            <p>اگر payload شامل `tmp_session` باشد، همان مستقیما برای decode استفاده می‌شود.</p>
+            <p>اگر هیچ‌کدام نبود، مقدار فیلد `auth` و نوع انتخاب‌شده استفاده می‌شود.</p>
+          </div>
+        </form>
+
+        <section class="panel output">
+          <div class="output-header">
+            <div>
+              <p class="panel-kicker">خروجی</p>
+              <h2>Decoded Output</h2>
+            </div>
+            <button type="button" id="copy-output">Copy</button>
+          </div>
+          <pre id="decoded-output" class="code-block">منتظر payload...</pre>
+        </section>
+      </section>
+
+      <section class="grid secondary">
+        <section class="panel">
+          <h2>Quick Notes</h2>
+          <ul class="notes">
+            <li>`data_enc` با AES-CBC و IV صفر decode می‌شود.</li>
+            <li>اولویت کلید: `tmp_session` داخل payload، بعد `auth` داخل payload، بعد `auth` دستی.</li>
+            <li>این UI منطق `rubigram.crypto.cipher` را در مرورگر بازسازی می‌کند.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Run</h2>
+          <pre class="code-block">open tools/payload-decoder/index.html</pre>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

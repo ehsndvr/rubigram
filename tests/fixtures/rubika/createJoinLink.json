@@ -1,0 +1,40 @@
+[
+  {
+    "method": "createJoinLink",
+    "input": {
+      "object_guid": "g0EXAMPLE00000000000000000000007",
+      "title": "Sample title",
+      "request_needed": false,
+      "expire_time": 86400,
+      "usage_limit": 10
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "join_link": {
+        "object_guid": {
+          "type": "Group",
+          "object_guid": "g0EXAMPLE00000000000000000000007"
+        },
+        "join_link": "https://rubika.ir/joing/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "creator_guid": "u0EXAMPLE00000000000000000000002",
+        "create_time": 1774238631,
+        "request_pending_count": 0,
+        "request_needed": false,
+        "usage_limit": 10,
+        "title": "Sample title",
+        "expire_time": 86400,
+        "expire_at": 1774325031
+      }
+    }
+  }
+]

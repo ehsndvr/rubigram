@@ -1,0 +1,38 @@
+[
+  {
+    "method": "setChannelAdmin",
+    "input": {
+      "channel_guid": "c0EXAMPLE00000000000000000000003",
+      "member_guid": "u0EXAMPLE00000000000000000000001",
+      "action": "UnsetAdmin"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "in_chat_member": {
+        "member_type": "User",
+        "member_guid": "u0EXAMPLE00000000000000000000001",
+        "first_name": "Sample",
+        "last_name": "User",
+        "is_verified": false,
+        "is_deleted": false,
+        "join_type": "Member",
+        "username": "sample_user",
+        "online_time": {
+          "type": "Approximate",
+          "approximate_period": "Recently"
+        }
+      },
+      "timestamp": "1774284708"
+    }
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "method": "getGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "group": {
+        "group_guid": "g0EXAMPLE00000000000000000000007",
+        "group_title": "Sample group",
+        "count_members": 2,
+        "is_deleted": false,
+        "is_verified": false,
+        "slow_mode": 0,
+        "chat_history_for_new_members": "Visible",
+        "event_messages": true,
+        "chat_reaction_setting": {
+          "reaction_type": "All"
+        },
+        "is_restricted_content": false
+      },
+      "chat": {
+        "object_guid": "g0EXAMPLE00000000000000000000007",
+        "access": [
+          "ChangeInfo",
+          "PinMessages",
+          "DeleteGlobalAllMessages",
+          "BanMember",
+          "SetAdmin",
+          "SetJoinLink",
+          "SetMemberAccess",
+          "ViewMembers",
+          "ViewAdmins",
+          "SendMessages",
+          "AddMember",
+          "SuperAdmin",
+          "RemoveObject",
+          "ViewInfo",
+          "ViewMessages",
+          "DeleteLocalMessages",
+          "EditMyMessages",
+          "DeleteGlobalMyMessages"
+        ],
+        "count_unseen": 1,
+        "is_mute": false,
+        "is_pinned": false,
+        "time_string": "177423711600001571692526621380",
+        "last_message": {
+          "message_id": "1571692526621380",
+          "type": "Other",
+          "text": "sample text",
+          "is_mine": false
+        },
+        "last_seen_my_mid": "0",
+        "last_seen_peer_mid": "0",
+        "status": "Active",
+        "time": 1774237116,
+        "abs_object": {
+          "object_guid": "g0EXAMPLE00000000000000000000007",
+          "type": "Group",
+          "title": "Sample title",
+          "is_verified": false,
+          "is_deleted": false
+        },
+        "is_blocked": false,
+        "last_message_id": "1571692526621380",
+        "last_deleted_mid": "0",
+        "slow_mode_duration": 0,
+        "show_ask_spam": false,
+        "auto_delete": "Off"
+      },
+      "timestamp": "1774237116"
+    }
+  }
+]

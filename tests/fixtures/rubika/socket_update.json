@@ -1,0 +1,72 @@
+{
+  "chat_updates": [
+    {
+      "object_guid": "u0EXAMPLE00000000000000000000001",
+      "action": "Edit",
+      "chat": {
+        "count_unseen": 1,
+        "time_string": "177359569100001556351220500832",
+        "last_message": {
+          "message_id": "1556351220500832",
+          "type": "Text",
+          "text": "sample text",
+          "author_object_guid": "u0EXAMPLE00000000000000000000001",
+          "is_mine": false,
+          "author_type": "User"
+        },
+        "last_seen_peer_mid": "1556351220500832",
+        "status": "Active",
+        "time": 1773595691,
+        "last_message_id": "1556351220500832"
+      },
+      "updated_parameters": [
+        "last_message_id",
+        "last_message",
+        "status",
+        "time_string",
+        "count_unseen",
+        "last_seen_peer_mid",
+        "time"
+      ],
+      "timestamp": "1773595691",
+      "type": "User"
+    }
+  ],
+  "message_updates": [
+    {
+      "message_id": "1556351220500832",
+      "action": "New",
+      "message": {
+        "message_id": "1556351220500832",
+        "text": "sample text",
+        "time": "1773595691",
+        "is_edited": false,
+        "type": "Text",
+        "author_type": "User",
+        "author_object_guid": "u0EXAMPLE00000000000000000000001",
+        "allow_transcription": false
+      },
+      "updated_parameters": [],
+      "timestamp": "1773595691",
+      "prev_message_id": "248215745402832",
+      "object_guid": "u0EXAMPLE00000000000000000000001",
+      "type": "User",
+      "state": "1773595631",
+      "is_scheduled": false
+    }
+  ],
+  "show_notifications": [
+    {
+      "notification_id": "n_u0Crz5308d9ca919827a835fac44dbae1556351220500832",
+      "type": "Message",
+      "title": "Sample title",
+      "text": "sample text",
+      "message_data": {
+        "object_guid": "u0EXAMPLE00000000000000000000001",
+        "object_type": "User",
+        "message_id": 1556351220500832
+      }
+    }
+  ],
+  "user_guid": "u0EXAMPLE00000000000000000000002"
+}

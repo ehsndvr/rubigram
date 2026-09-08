@@ -1,0 +1,26 @@
+[
+  {
+    "method": "getContactsUpdates",
+    "input": {
+      "state": 1774239888
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "users": [],
+      "deleted_users": [],
+      "new_state": 1774284426,
+      "status": "OK",
+      "timestamp": "1774284486"
+    }
+  }
+]

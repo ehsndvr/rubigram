@@ -1,0 +1,51 @@
+[
+  {
+    "method": "getContactsLastOnline",
+    "input": {
+      "user_guids": [
+        "u0EXAMPLE00000000000000000000009",
+        "u0EXAMPLE00000000000000000000010",
+        "u0EXAMPLE00000000000000000000011"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "users": [
+        {
+          "user_guid": "u0EXAMPLE00000000000000000000009",
+          "last_online": 1714941000,
+          "online_time": {
+            "type": "Approximate",
+            "approximate_period": "LongAgo"
+          }
+        },
+        {
+          "user_guid": "u0EXAMPLE00000000000000000000010",
+          "last_online": 1714768200,
+          "online_time": {
+            "type": "Approximate",
+            "approximate_period": "LongAgo"
+          }
+        },
+        {
+          "user_guid": "u0EXAMPLE00000000000000000000011",
+          "last_online": 1714681800,
+          "online_time": {
+            "type": "Approximate",
+            "approximate_period": "LongAgo"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,22 @@
+[Unit]
+Description=rubigram membership worker — Celery
+After=network.target redis.service worker-api.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=rubigram
+Group=rubigram
+WorkingDirectory=/opt/rubigram
+EnvironmentFile=/opt/rubigram/membership_worker/.env
+Environment=PYTHONPATH=/opt/rubigram
+Environment=DJANGO_SETTINGS_MODULE=membership_worker.project.settings
+ExecStart=/opt/rubigram/.venv/bin/celery -A membership_worker.project.celery worker -l INFO -Q membership,callbacks,default --concurrency=4
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rubigram-worker-celery
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+[
+  {
+    "method": "banGroupMember",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "member_guid": "b0EXAMPLE00000000000000000000005",
+      "action": "Set"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "timestamp": "1774239170",
+      "group": {
+        "group_guid": "g0EXAMPLE00000000000000000000007",
+        "group_title": "Sample group",
+        "count_members": 1,
+        "is_deleted": false,
+        "is_verified": false,
+        "slow_mode": 0,
+        "chat_history_for_new_members": "Hidden",
+        "event_messages": false,
+        "chat_reaction_setting": {
+          "reaction_type": "All"
+        },
+        "is_restricted_content": true
+      }
+    }
+  }
+]

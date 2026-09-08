@@ -24,6 +24,7 @@ class UserStatus(AutoName):
     LONG_AGO = auto()
     """User was seen long ago"""
 
+
 # Online times convert to rubika
 # Approximate = RECENTLY
-# 
+#

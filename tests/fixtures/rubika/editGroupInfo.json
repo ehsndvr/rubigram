@@ -1,0 +1,231 @@
+[
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "slow_mode": 30,
+      "updated_parameters": [
+        "slow_mode"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "chat_reaction_setting": {
+        "reaction_type": "Disabled"
+      },
+      "updated_parameters": [
+        "chat_reaction_setting"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "chat_reaction_setting": {
+        "reaction_type": "Selected",
+        "selected_reactions": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26",
+          "27",
+          "28",
+          "29",
+          "30",
+          "31",
+          "32",
+          "33",
+          "34",
+          "35",
+          "36",
+          "38",
+          "40",
+          "41",
+          "42",
+          "43",
+          "44",
+          "45",
+          "46",
+          "47",
+          "48",
+          "49",
+          "50",
+          "51",
+          "52",
+          "53",
+          "54",
+          "55",
+          "56",
+          "57",
+          "58",
+          "59",
+          "60",
+          "61",
+          "62",
+          "63",
+          "64",
+          "65",
+          "74"
+        ]
+      },
+      "updated_parameters": [
+        "chat_reaction_setting"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "chat_reaction_setting": {
+        "reaction_type": "All"
+      },
+      "updated_parameters": [
+        "chat_reaction_setting"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "event_messages": true,
+      "updated_parameters": [
+        "event_messages"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "chat_history_for_new_members": "Visible",
+      "updated_parameters": [
+        "chat_history_for_new_members"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "chat_history_for_new_members": "Hidden",
+      "updated_parameters": [
+        "chat_history_for_new_members"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "method": "editGroupInfo",
+    "input": {
+      "group_guid": "g0EXAMPLE00000000000000000000007",
+      "event_messages": false,
+      "updated_parameters": [
+        "event_messages"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "group": {
+        "group_guid": "g0EXAMPLE00000000000000000000007",
+        "group_title": "Sample group",
+        "count_members": 2,
+        "is_deleted": false,
+        "is_verified": false,
+        "slow_mode": 0,
+        "chat_history_for_new_members": "Visible",
+        "event_messages": true,
+        "chat_reaction_setting": {
+          "reaction_type": "All"
+        },
+        "is_restricted_content": false
+      },
+      "timestamp": "1774238754"
+    }
+  }
+]

@@ -1,0 +1,40 @@
+[
+  {
+    "method": "getChannelAdminMembers",
+    "input": {
+      "channel_guid": "c0EXAMPLE00000000000000000000003"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "in_chat_members": [
+        {
+          "member_type": "User",
+          "member_guid": "u0EXAMPLE00000000000000000000002",
+          "first_name": "Sample",
+          "is_verified": false,
+          "is_deleted": false,
+          "last_online": 1774284227,
+          "join_type": "Creator",
+          "username": "sample_user",
+          "online_time": {
+            "type": "Exact",
+            "exact_time": 1774284227
+          }
+        }
+      ],
+      "next_start_id": "69c0c1472b7c9ba33d9d6f7b",
+      "has_continue": false,
+      "timestamp": "1774284227"
+    }
+  }
+]

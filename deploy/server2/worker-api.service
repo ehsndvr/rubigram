@@ -1,0 +1,22 @@
+[Unit]
+Description=rubigram membership worker — API (Daphne ASGI)
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=rubigram
+Group=rubigram
+WorkingDirectory=/opt/rubigram
+EnvironmentFile=/opt/rubigram/membership_worker/.env
+Environment=PYTHONPATH=/opt/rubigram
+Environment=DJANGO_SETTINGS_MODULE=membership_worker.project.settings
+ExecStart=/opt/rubigram/.venv/bin/daphne -b 127.0.0.1 -p 8081 membership_worker.project.asgi:application
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rubigram-worker-api
+
+[Install]
+WantedBy=multi-user.target

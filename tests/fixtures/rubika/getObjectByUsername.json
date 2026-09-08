@@ -1,0 +1,82 @@
+[
+  {
+    "method": "getObjectByUsername",
+    "input": {
+      "username": "sample_user"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "exist": true,
+      "type": "User",
+      "user": {
+        "user_guid": "u0EXAMPLE00000000000000000000001",
+        "first_name": "Sample",
+        "last_name": "User",
+        "phone": "989120000000",
+        "username": "sample_user",
+        "last_online": 1773174600,
+        "is_deleted": false,
+        "is_verified": false,
+        "online_time": {
+          "type": "Approximate",
+          "approximate_period": "Recently"
+        }
+      },
+      "chat": {
+        "object_guid": "u0EXAMPLE00000000000000000000001",
+        "access": [
+          "ViewInfo",
+          "ViewMessages",
+          "DeleteLocalMessages",
+          "EditMyMessages",
+          "DeleteGlobalMyMessages",
+          "SendMessages",
+          "PinMessages"
+        ],
+        "count_unseen": 0,
+        "is_mute": false,
+        "is_pinned": false,
+        "time_string": "165467843000000248215745402832",
+        "last_message": {
+          "message_id": "248215745402832",
+          "type": "Text",
+          "text": "sample text",
+          "author_object_guid": "u0EXAMPLE00000000000000000000002",
+          "is_mine": true,
+          "author_title": "شما",
+          "author_type": "User"
+        },
+        "last_seen_my_mid": "248215745402832",
+        "last_seen_peer_mid": "248215745402832",
+        "status": "Active",
+        "time": 1654678430,
+        "abs_object": {
+          "object_guid": "u0EXAMPLE00000000000000000000001",
+          "type": "User",
+          "first_name": "Sample",
+          "last_name": "User",
+          "is_verified": false,
+          "is_deleted": false
+        },
+        "is_blocked": false,
+        "last_message_id": "248215745402832",
+        "last_deleted_mid": "0",
+        "is_in_contact": true,
+        "show_ask_spam": false,
+        "auto_delete": "Off"
+      },
+      "timestamp": "1773247678",
+      "is_in_contact": true
+    }
+  }
+]

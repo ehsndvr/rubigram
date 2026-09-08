@@ -1,0 +1,76 @@
+[
+  {
+    "method": "editChannelInfo",
+    "input": {
+      "channel_guid": "c0EXAMPLE00000000000000000000003",
+      "title": "Sample title",
+      "description": "Sample description",
+      "updated_parameters": [
+        "title",
+        "description"
+      ]
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "channel": {
+        "channel_guid": "c0EXAMPLE00000000000000000000003",
+        "channel_title": "Sample channel",
+        "avatar_thumbnail": {
+          "file_id": "88602634217110",
+          "mime": "jpg",
+          "dc_id": "846",
+          "access_hash_rec": "ACCESS_HASH_REMOVED"
+        },
+        "count_members": 2,
+        "description": "Sample description",
+        "is_deleted": false,
+        "is_verified": false,
+        "channel_type": "Private",
+        "sign_messages": false,
+        "chat_reaction_setting": {
+          "reaction_type": "Selected",
+          "selected_reactions": [
+            "3",
+            "2"
+          ]
+        },
+        "is_restricted_content": false
+      },
+      "chat_update": {
+        "object_guid": "c0EXAMPLE00000000000000000000003",
+        "action": "Edit",
+        "chat": {
+          "abs_object": {
+            "object_guid": "c0EXAMPLE00000000000000000000003",
+            "type": "Channel",
+            "title": "Sample title",
+            "avatar_thumbnail": {
+              "file_id": "88602634217110",
+              "mime": "jpg",
+              "dc_id": "846",
+              "access_hash_rec": "ACCESS_HASH_REMOVED"
+            },
+            "is_verified": false,
+            "is_deleted": false
+          }
+        },
+        "updated_parameters": [
+          "abs_object"
+        ],
+        "timestamp": "1774284150",
+        "type": "Channel"
+      },
+      "timestamp": "1774284150"
+    }
+  }
+]

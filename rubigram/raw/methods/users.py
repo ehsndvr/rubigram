@@ -1,186 +1,241 @@
+"""User, profile and contact RPCs."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict, List, Optional
 
 from rubigram.raw.base import RawMethod
-from rubigram.types import ChatAvatars, ContactsLastOnline, ObjectByUsername, ProfileLinkItems, RawObject, SearchGlobalObjectsResult, UserInfo
-
-if TYPE_CHECKING:
-    import rubigram
+from rubigram.types import (
+    AbsObjects,
+    BlockedUsers,
+    ChatAvatars,
+    CommonGroups,
+    Contacts,
+    ContactsLastOnline,
+    ContactsUpdates,
+    Empty,
+    ObjectByUsername,
+    ProfileLinkItems,
+    SearchGlobalObjectsResult,
+    UpdatedProfile,
+    UserInfo,
+    UsernameCheck,
+)
 
 
 @dataclass
 class GetUserInfo(RawMethod[UserInfo]):
-    """
-    Get detailed information about a user.
-
-    Requires authentication.
-    """
     user_guid: str
 
     method_name = "getUserInfo"
-
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "user_guid": self.user_guid,
-        }
-
-    def parse_response(self, client: "rubigram.Client", data: Any) -> UserInfo:
-        return UserInfo._parse(client, data)
+    result = UserInfo
 
 
 @dataclass
 class GetObjectByUsername(RawMethod[ObjectByUsername]):
-    """
-    Get a user or chat object by its username.
-
-    Requires authentication.
-    """
     username: str
 
     method_name = "getObjectByUsername"
+    result = ObjectByUsername
 
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "username": self.username,
-        }
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> ObjectByUsername:
-        return ObjectByUsername._parse(client, data)
+@dataclass
+class GetAbsObjects(RawMethod[AbsObjects]):
+    objects_guids: List[str]
+
+    method_name = "getAbsObjects"
+    result = AbsObjects
 
 
 @dataclass
 class GetAvatars(RawMethod[ChatAvatars]):
-    """
-    Get avatar images for a user or chat.
-
-    Requires authentication.
-    """
     object_guid: str
 
     method_name = "getAvatars"
-
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "object_guid": self.object_guid,
-        }
-
-    def parse_response(self, client: "rubigram.Client", data: Any) -> ChatAvatars:
-        return ChatAvatars._parse(client, data)
+    result = ChatAvatars
 
 
 @dataclass
-class BlockUser(RawMethod[RawObject]):
-    """
-    Block a user.
+class UpdateProfile(RawMethod[UpdatedProfile]):
+    updated_parameters: List[str]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    bio: Optional[str] = None
+    birth_date: Optional[str] = None
 
-    Requires authentication.
-    """
-    object_guid: str
-
-    method_name = "blockUser"
-
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "object_guid": self.object_guid,
-        }
+    method_name = "updateProfile"
+    result = UpdatedProfile
 
 
 @dataclass
-class UnblockUser(RawMethod[RawObject]):
-    """
-    Unblock a user.
+class UpdateUsername(RawMethod[UpdatedProfile]):
+    username: str
 
-    Requires authentication.
-    """
-    object_guid: str
-
-    method_name = "unblockUser"
-
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "object_guid": self.object_guid,
-        }
+    method_name = "updateUsername"
+    result = UpdatedProfile
 
 
 @dataclass
-class GetContacts(RawMethod[RawObject]):
-    """
-    Get the user's contact list.
+class CheckUserUsername(RawMethod[UsernameCheck]):
+    username: str
 
-    Requires authentication.
-    """
-    offset: int = 0
-    limit: int = 100
+    method_name = "checkUserUsername"
+    result = UsernameCheck
+
+
+@dataclass
+class SetBlockUser(RawMethod[Any]):
+    user_guid: str
+    action: str = "Block"
+
+    method_name = "setBlockUser"
+
+
+@dataclass
+class BlockUser(SetBlockUser):
+    """rubigram 0.1 name: ``setBlockUser`` with ``action=Block``."""
+
+    def __init__(self, object_guid: Optional[str] = None, *, user_guid: Optional[str] = None):
+        super().__init__(user_guid=user_guid or object_guid or "", action="Block")
+
+
+@dataclass
+class UnblockUser(SetBlockUser):
+    """rubigram 0.1 name: ``setBlockUser`` with ``action=Unblock``."""
+
+    def __init__(self, object_guid: Optional[str] = None, *, user_guid: Optional[str] = None):
+        super().__init__(user_guid=user_guid or object_guid or "", action="Unblock")
+
+
+@dataclass
+class GetBlockedUsers(RawMethod[BlockedUsers]):
+    start_id: Optional[str] = None
+
+    method_name = "getBlockedUsers"
+    result = BlockedUsers
+
+
+@dataclass
+class GetContacts(RawMethod[Contacts]):
+    start_id: Optional[str] = None
 
     method_name = "getContacts"
+    result = Contacts
 
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "offset": self.offset,
-            "limit": self.limit,
-        }
+
+@dataclass
+class GetContactsUpdates(RawMethod[ContactsUpdates]):
+    state: int
+
+    method_name = "getContactsUpdates"
+    result = ContactsUpdates
 
 
 @dataclass
 class GetContactsLastOnline(RawMethod[ContactsLastOnline]):
-    """
-    Get last-online data for multiple users.
-
-    Requires authentication.
-    """
-
-    user_guids: list[str]
+    user_guids: List[str]
 
     method_name = "getContactsLastOnline"
+    result = ContactsLastOnline
 
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "user_guids": self.user_guids,
-        }
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> ContactsLastOnline:
-        return ContactsLastOnline._parse(client, data)
+@dataclass
+class AddAddressBook(RawMethod[UpdatedProfile]):
+    phone: str
+    first_name: str
+    last_name: str = ""
+
+    method_name = "addAddressBook"
+    result = UpdatedProfile
+
+
+@dataclass
+class DeleteContact(RawMethod[Empty]):
+    user_guid: str
+
+    method_name = "deleteContact"
+    result = Empty
+
+
+@dataclass
+class ResetContacts(RawMethod[Empty]):
+    method_name = "resetContacts"
+    result = Empty
 
 
 @dataclass
 class GetProfileLinkItems(RawMethod[ProfileLinkItems]):
-    """
-    Get profile link items for a user or chat object.
-
-    Requires authentication.
-    """
-
     object_guid: str
 
     method_name = "getProfileLinkItems"
+    result = ProfileLinkItems
 
-    def to_input(self) -> Dict[str, Any]:
-        return {
-            "object_guid": self.object_guid,
-        }
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> ProfileLinkItems:
-        return ProfileLinkItems._parse(client, data)
+@dataclass
+class GetCommonGroups(RawMethod[CommonGroups]):
+    user_guid: str
+
+    method_name = "getCommonGroups"
+    result = CommonGroups
 
 
 @dataclass
 class SearchGlobalObjects(RawMethod[SearchGlobalObjectsResult]):
-    """
-    Search global users, bots, channels, and groups.
-
-    Requires authentication.
-    """
-
     search_text: str
-    filter_types: list[str]
+    filter_types: Optional[List[str]] = None
 
     method_name = "searchGlobalObjects"
+    result = SearchGlobalObjectsResult
 
     def to_input(self) -> Dict[str, Any]:
-        return {
-            "search_text": self.search_text,
-            "filter_types": self.filter_types,
-        }
+        data: Dict[str, Any] = {"search_text": self.search_text}
+        if self.filter_types:
+            data["filter_types"] = list(self.filter_types)
+        return data
 
-    def parse_response(self, client: "rubigram.Client", data: Any) -> SearchGlobalObjectsResult:
-        return SearchGlobalObjectsResult._parse(client, data)
+
+@dataclass
+class ReportObject(RawMethod[Empty]):
+    object_guid: str
+    report_type: str
+    report_description: Optional[str] = None
+    report_type_object: Optional[str] = None
+    message_id: Optional[str] = None
+
+    method_name = "reportObject"
+    result = Empty
+
+
+@dataclass
+class SetAskSpamAction(RawMethod[Any]):
+    object_guid: str
+    action: str
+
+    method_name = "setAskSpamAction"
+
+
+__all__ = [
+    "AddAddressBook",
+    "BlockUser",
+    "CheckUserUsername",
+    "DeleteContact",
+    "GetAbsObjects",
+    "GetAvatars",
+    "GetBlockedUsers",
+    "GetCommonGroups",
+    "GetContacts",
+    "GetContactsLastOnline",
+    "GetContactsUpdates",
+    "GetObjectByUsername",
+    "GetProfileLinkItems",
+    "GetUserInfo",
+    "ReportObject",
+    "ResetContacts",
+    "SearchGlobalObjects",
+    "SetAskSpamAction",
+    "SetBlockUser",
+    "UnblockUser",
+    "UpdateProfile",
+    "UpdateUsername",
+]

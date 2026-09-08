@@ -1,15 +1,24 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*.egg-info/
+build/
+dist/
 .venv/
 .env
-*.session
-*.sqlite3
-dist/
-build/
-*.egg-info/
+.ruff_cache/
+.mypy_cache/
 .pytest_cache/
+.pytest_tmp/
+
+# rubigram sessions and local data (never commit these)
+*.session
+*.session-journal
+*.sqlite3
+
+# editors and operating systems
 .vscode/
 .idea/
-examples.json
+.DS_Store
+._*
+Thumbs.db

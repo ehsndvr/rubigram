@@ -1,15 +1,32 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "rubigram"
-version = "0.1.0"
-description = "A modern Python client library for Rubika"
+version = "0.2.0"
+description = "Async Python client for Rubika: phone-number sessions, bots and Rubino, with typed results and a pyrogram-style handler API"
 readme = "README.md"
+license = { text = "LGPL-2.1-or-later" }
 requires-python = ">=3.10"
-authors = [
-  { name = "Ehsan Davari" }
+authors = [{ name = "Ehsan Davari" }]
+keywords = ["rubika", "rubino", "messenger", "bot", "asyncio", "client"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Communications :: Chat",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
 ]
 dependencies = [
   "cryptography>=42.0.0",
@@ -17,6 +34,67 @@ dependencies = [
   "websockets>=12.0",
 ]
 
+[project.optional-dependencies]
+socks = ["httpx[socks]>=0.27.0", "python-socks[asyncio]>=2.4"]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "pyright>=1.1.380",
+  "build>=1.2",
+  "Django>=5,<6",
+  "celery[redis]>=5.4,<6",
+]
+worker = [
+  "Django>=5,<6",
+  "celery[redis]>=5.4,<6",
+  "daphne>=4.1",
+  "psycopg[binary]>=3.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/ehsndvr/rubigram"
+Documentation = "https://github.com/ehsndvr/rubigram/tree/main/docs"
+Issues = "https://github.com/ehsndvr/rubigram/issues"
+
+[tool.setuptools.packages.find]
+include = ["rubigram*", "rubigram_internal*"]
+
+[tool.setuptools.package-data]
+rubigram = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 140
+target-version = "py310"
+extend-exclude = ["docs", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
+ignore = [
+  "E501",   # line length is handled by the formatter; long literal strings are fine
+  "RUF001", # ambiguous unicode in Persian user-facing text
+  "RUF002",
+  "RUF003",
+  "RUF012", # mutable class attributes are ClassVars by convention in raw methods
+  "SIM108", # ternaries do not always read better
+  "B008",   # default argument calls are used deliberately for Path()
+  "UP035",  # keep typing.Optional/Dict/List spelling consistent with the rest of the code
+  "UP006",
+  "UP007",
+  "UP045",
+  "ASYNC230", # local media is read/written in small chunks; offloading to threads is not worth it
+  "ASYNC240",
+  "RUF033",  # Object.__post_init__(client=None) is the InitVar default by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "SIM117", "RUF059", "ASYNC230", "B017"]
+"examples/*" = ["ASYNC230"]
+"membership_worker/worker/migrations/*" = ["E501", "RUF012", "I001"]
+
+[tool.ruff.format]
+quote-style = "double"

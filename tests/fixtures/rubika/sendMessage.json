@@ -1,0 +1,77 @@
+[
+  {
+    "method": "sendMessage",
+    "input": {
+      "object_guid": "u0EXAMPLE00000000000000000000002",
+      "rnd": "678093",
+      "text": "sample text"
+    },
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "message_update": {
+        "message_id": "1547993674553407",
+        "action": "New",
+        "message": {
+          "message_id": "1547993674553407",
+          "text": "sample text",
+          "time": "1773247473",
+          "is_edited": false,
+          "type": "Text",
+          "author_type": "User",
+          "author_object_guid": "u0EXAMPLE00000000000000000000002",
+          "allow_transcription": false
+        },
+        "updated_parameters": [],
+        "timestamp": "1773247473",
+        "prev_message_id": "1546719046885407",
+        "object_guid": "u0EXAMPLE00000000000000000000002",
+        "type": "User",
+        "state": "1773247413",
+        "is_scheduled": false
+      },
+      "status": "OK",
+      "chat_update": {
+        "object_guid": "u0EXAMPLE00000000000000000000002",
+        "action": "Edit",
+        "chat": {
+          "time_string": "177324747300001547993674553407",
+          "last_message": {
+            "message_id": "1547993674553407",
+            "type": "Text",
+            "text": "sample text",
+            "author_object_guid": "u0EXAMPLE00000000000000000000002",
+            "is_mine": true,
+            "author_title": "شما",
+            "author_type": "User"
+          },
+          "last_seen_my_mid": "1547993674553407",
+          "last_seen_peer_mid": "0",
+          "status": "Active",
+          "time": 1773247473,
+          "last_message_id": "1547993674553407"
+        },
+        "updated_parameters": [
+          "last_message_id",
+          "last_message",
+          "status",
+          "time_string",
+          "last_seen_peer_mid",
+          "last_seen_my_mid",
+          "time"
+        ],
+        "timestamp": "1773247473",
+        "type": "User"
+      }
+    }
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "method": "getUserSetting",
+    "input": {},
+    "client": {
+      "app_name": "Main",
+      "app_version": "4.4.27",
+      "platform": "Web",
+      "package": "web.rubika.ir",
+      "lang_code": "fa"
+    }
+  },
+  {
+    "status": "OK",
+    "status_det": "OK",
+    "data": {
+      "privacy_setting": {
+        "count_blocked_user": 0,
+        "count_active_sessions": 11,
+        "sign_in_type": "Simple",
+        "show_my_phone_number": "MyContacts",
+        "show_my_profile_photo": "MyContacts",
+        "can_join_chat_by": "Everybody",
+        "link_forward_message": "Nobody",
+        "can_called_by": "Nobody",
+        "delete_account_not_active_months": 24,
+        "show_my_last_online": "Nobody",
+        "exceptions": [],
+        "show_my_birth_date": "MyContacts",
+        "auto_delete": "Off"
+      },
+      "access_list": [
+        "SetTwoStep",
+        "AddGroup",
+        "AddChannel",
+        "AllowTransfer",
+        "RemoveGroup",
+        "SetGroupJoinLink"
+      ]
+    }
+  }
+]

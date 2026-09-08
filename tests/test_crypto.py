@@ -3,6 +3,7 @@ import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from rubigram.crypto import (
     AuthSigner,
@@ -51,14 +52,20 @@ def test_codec_build_payload_supports_auth_and_tmp_session():
     assert "auth" not in tmp_payload
     assert "sign" not in tmp_payload
     assert tmp_payload["tmp_session"] == "abcdefghijklmnopqrstuvwxyzabcdef"
-    assert decrypt_aes_cbc(
-        auth_payload["data_enc"],
-        "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb",
-    ) == data
-    assert decrypt_aes_cbc(
-        tmp_payload["data_enc"],
-        "abcdefghijklmnopqrstuvwxyzabcdef",
-    ) == data
+    assert (
+        decrypt_aes_cbc(
+            auth_payload["data_enc"],
+            "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb",
+        )
+        == data
+    )
+    assert (
+        decrypt_aes_cbc(
+            tmp_payload["data_enc"],
+            "abcdefghijklmnopqrstuvwxyzabcdef",
+        )
+        == data
+    )
 
 
 def test_auth_unwrapper_supports_pkcs1_v15():
@@ -69,6 +76,7 @@ def test_auth_unwrapper_supports_pkcs1_v15():
         backend=default_backend(),
     )
     public_key = private_key.public_key()
+    assert isinstance(public_key, RSAPublicKey)
     expected_auth = "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb"
     encrypted_auth = base64.b64encode(
         public_key.encrypt(
@@ -89,6 +97,7 @@ def test_auth_unwrapper_supports_oaep_sha1():
         backend=default_backend(),
     )
     public_key = private_key.public_key()
+    assert isinstance(public_key, RSAPublicKey)
     expected_auth = "zjbyfpwfoxtvhfgdlohvtjcczxxqhsnb"
     encrypted_auth = base64.b64encode(
         public_key.encrypt(
@@ -116,10 +125,15 @@ def test_rsa_key_generate_returns_usable_public_and_private_keys():
         password=None,
         backend=default_backend(),
     )
-    raw_public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8").strip()
+    raw_public_pem = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+        .strip()
+    )
     raw_public_b64 = base64.b64encode(raw_public_pem.encode("utf-8")).decode("utf-8")
 
     assert "BEGIN RSA PRIVATE KEY" in private_pem

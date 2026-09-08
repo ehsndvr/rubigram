@@ -1,4 +1,7 @@
-from rubigram.raw.base import RawMethod
-from rubigram.raw import methods
+"""Raw layer: declarative RPC methods (``raw.methods``) and payload builders (``raw.functions``)."""
 
-__all__ = ["RawMethod", "methods"]
+from rubigram.raw import functions, methods
+from rubigram.raw.base import RawMethod
+from rubigram.raw.methods import METHODS, method_for
+
+__all__ = ["METHODS", "RawMethod", "functions", "method_for", "methods"]
