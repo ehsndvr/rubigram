@@ -109,6 +109,8 @@ class Client(Methods):
         enable_register_device: bool = True,
         retry_policy: Optional[RetryPolicy] = None,
         poll_interval: float = 5.0,
+        discover_dcs: bool = True,
+        refresh_base_info: bool = True,
         # rubigram 0.1 keyword names
         interactive_auth: Optional[bool] = None,
         enable_socket_handshake: Optional[bool] = None,
@@ -141,6 +143,8 @@ class Client(Methods):
         self.enable_register_device = enable_register_device
         self.retry_policy = retry_policy or DEFAULT_RETRY_POLICY
         self.poll_interval = poll_interval
+        self.discover_dcs = discover_dcs
+        self.refresh_base_info = refresh_base_info
         self.socket_heartbeat_interval = socket_heartbeat_interval or self.SOCKET_HEARTBEAT_INTERVAL
         self.device_info: Dict[str, str] = (
             dict(device_info)
@@ -243,7 +247,8 @@ class Client(Methods):
     async def _start_user_session(self) -> None:
         self._discovery = DcDiscovery(timeout=self.timeout, proxy=self.proxy, client_info=self.client_info, user_agent=self.user_agent)
         self.dc = DcRepository.from_dict(await self.storage.dc_repository())
-        await self._refresh_dcs(required=not self.dc.storages)
+        if self.discover_dcs or not self.dc.storages:
+            await self._refresh_dcs(required=not self.dc.storages)
         self.dc.merge_urls(DcType.SOCKET, self.socket_urls)
         self._http = HttpTransport(
             self.dc.pool(DcType.API),
@@ -282,10 +287,11 @@ class Client(Methods):
             await self._after_login()
 
     async def _after_login(self) -> None:
-        try:
-            await self._ensure_base_info(force=True)
-        except RubigramError as exc:
-            log.warning("Base info refresh failed during startup: %s", exc)
+        if self.refresh_base_info:
+            try:
+                await self._ensure_base_info(force=True)
+            except RubigramError as exc:
+                log.warning("Base info refresh failed during startup: %s", exc)
         await self._ensure_registered_device()
         if self._transport_mode.is_ws and self.enable_socket:
             try:

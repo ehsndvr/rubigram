@@ -92,7 +92,16 @@ The same `Client` class serves both; shared methods (`send_message`,
 - [Examples](docs/examples.md) and the [`examples/`](examples) directory
 - [Architecture](docs/architecture.md) — how the layers fit together
 - [Migrating from 0.1](docs/migration.md)
+- [Membership worker](docs/membership-worker.md) — the Django + Celery service that runs join/leave/view orders for a panel
 - [Redesign notes](docs/redesign) — protocol audit, coverage matrix, decisions
+
+## Membership worker
+
+`membership_worker/` is a deployable service built on the library: it keeps a
+pool of Rubika accounts (session strings in its database) and executes
+join / leave / view orders received over a signed HTTP API, reporting back with
+signed callbacks. It speaks the same protocol as the balegram worker, so the
+same panel drives both. See [docs/membership-worker.md](docs/membership-worker.md).
 
 ## Development
 

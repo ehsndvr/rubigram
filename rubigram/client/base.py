@@ -94,6 +94,8 @@ class BaseClient:
     enable_register_device: bool
     retry_policy: RetryPolicy
     poll_interval: float
+    discover_dcs: bool
+    refresh_base_info: bool
     socket_heartbeat_interval: float
     device_info: Dict[str, str]
     session_invalid: bool

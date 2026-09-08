@@ -14,6 +14,7 @@ pyright                                  # basic mode; library must be at 0 erro
 python -m build                          # wheel must contain only rubigram/
 python tools/gen_method_reference.py     # regenerate docs/method-reference.md after docstring changes
 RUBIGRAM_INTEGRATION=1 python -m pytest tests/integration -q   # live, read-only, needs a session
+python membership_worker/manage.py migrate                     # the worker service (Django + Celery, see docs/membership-worker.md)
 ```
 
 ## Layout
@@ -31,6 +32,15 @@ RUBIGRAM_INTEGRATION=1 python -m pytest tests/integration -q   # live, read-only
   unknown keys land in `.extra`. Bot payloads are in `rubigram/types/bot/`.
 - `rubigram/network/` transports know nothing about methods; `rubigram/storage/`
   knows nothing about the network.
+- `membership_worker/` is a Django + Celery service on top of the library
+  (`worker/rubika.py` is the only module that calls rubigram; `jobs.py`,
+  `items.py`, `recovery.py` are pure bookkeeping; `views.py` is the signed API).
+  `rubigram_internal/signing.py` is the HMAC scheme shared with the panel and
+  must stay wire-compatible with balegram's. Its tests live in
+  `tests/test_membership_worker.py` and use a temporary SQLite database with
+  every Rubika action stubbed.
+  The worker is excluded from pyright until `django-stubs` can be installed
+  (without it every ORM access is a false positive); ruff still covers it.
 - Shims kept for 0.1 imports: `rubigram/bot/*`, `rubigram/exceptions/`,
   `rubigram/types/results.py`, `rubigram/network/transport.py`,
   `rubigram/network/socket.py`, `rubigram/raw/methods/updates.py`.
