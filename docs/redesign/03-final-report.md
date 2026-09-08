@@ -1,7 +1,7 @@
 # Final report — rubigram 0.2 redesign
 
 Date: 2026-09-07. Branch: `claude/rubigram-balegram-redesign-80eb77` (13 commits on
-top of `master` at `501cfc8`; `master` untouched; no remote exists, nothing was
+top of `master` at `ed9f5bb`; `master` untouched; no remote exists, nothing was
 pushed). Everything below was produced and verified inside the worktree
 `C:\Codes\rubigram\.claude\worktrees\rubigram-balegram-redesign-80eb77`.
 
@@ -30,11 +30,11 @@ merged into `Client(token=...)`.
 ## 2. Rescued work (Phase 0)
 
 The main checkout had 14 modified files that were never committed. They were
-committed first as `c0ed041` (17 files, +1,805 / −339): Rubino post support
+committed first as `7df5a62` (17 files, +1,805 / −339): Rubino post support
 (`get_rubino_post`, `RubinoPost`/`UrlFile` types with download), the `DcType`
 enum, `JsonTransport`, `download_url`, storage tweaks, docs and tests. The main
 checkout still shows those edits as modified files; they are identical to what
-`c0ed041` contains and can be discarded there after the branch is merged (that
+`7df5a62` contains and can be discarded there after the branch is merged (that
 is the owner's call; nothing was reset).
 
 ## 3. Protocol discovery (Phase 1)
@@ -190,19 +190,21 @@ Removed from the **main checkout** (untracked junk; sizes measured before deleti
 
 | Hash | Message |
 |---|---|
-| `c0ed041` | نجات کار ذخیره‌نشدهٔ مالک — Rescue owner's uncommitted work |
-| `d893601` | ممیزی فاز صفر — Phase 0 audit |
-| `efe0b6c` | فاز یک: کشف پروتکل — Phase 1: protocol discovery, coverage matrix, samples |
-| `43d73cd` | فاز دو: طرح معماری — Phase 2: architecture plan |
-| `f35af47` | پکیج خطاهای یکپارچه — Unified errors package |
-| `8f7a86e` | لایهٔ شبکه — Network layer |
-| `ebf828a` | ذخیره‌سازی — Storage and session string |
-| `0585c05` | لایهٔ انواع — Types layer |
-| `dac3b88` | لایهٔ raw — Raw layer |
-| `3422127` | کلاینت نازک با mixinها — Thin Client, dispatcher, filters, Bot API merge |
-| `090bdb4` | پاک‌سازی — Cleanup, examples, integration tests, license |
-| `53391bc` | دروازهٔ کیفیت — Quality gate and 0.2.0 packaging |
-| `fb1a2f5` | مستندات ۰.۲ — 0.2 documentation and CLAUDE.md |
+| `7df5a62` | نجات کار ذخیره‌نشدهٔ مالک — Rescue owner's uncommitted work |
+| `7214085` | ممیزی فاز صفر — Phase 0 audit |
+| `5a277e6` | فاز یک: کشف پروتکل — Phase 1: protocol discovery, coverage matrix, samples |
+| `af62d19` | فاز دو: طرح معماری — Phase 2: architecture plan |
+| `435a8b4` | پکیج خطاهای یکپارچه — Unified errors package |
+| `ea166db` | لایهٔ شبکه — Network layer |
+| `bd78c7b` | ذخیره‌سازی — Storage and session string |
+| `354555e` | لایهٔ انواع — Types layer |
+| `a32bc0d` | لایهٔ raw — Raw layer |
+| `327173d` | کلاینت نازک با mixinها — Thin Client, dispatcher, filters, Bot API merge |
+| `81bbe12` | پاک‌سازی — Cleanup, examples, integration tests, license |
+| `44b50a8` | دروازهٔ کیفیت — Quality gate and 0.2.0 packaging |
+| `fdbe49c` | مستندات ۰.۲ — 0.2 documentation and CLAUDE.md |
+
+> History note (2026-09-08): before the first push to GitHub the four files that carried secrets or real identifiers (`ai.md`, `examples.json`, `tests/local_bot_test.py`, `tests/local_client_test.py`) were removed from every commit, so the hashes above are the rewritten ones. The old local `master` in the main checkout still has the original history and must be replaced by `origin/main`.
 
 ## 8. What could not be verified
 
