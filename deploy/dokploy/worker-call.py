@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rubigram_internal.signing import sign_json  # noqa: E402
+from rubigram_internal.signing import sign_json
 
 ENDPOINTS = {
     "health": ("GET", "/internal/health/"),
@@ -49,7 +49,7 @@ def main(argv: list[str]) -> int:
     body, headers = sign_json({}, secret=secret, header_prefix=os.environ.get("WORKER_SIGNATURE_HEADER_PREFIX", "X-Balegram"))
     request = urllib.request.Request(base_url + path, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - operator-supplied URL
+        with urllib.request.urlopen(request, timeout=30) as response:
             status, payload = response.status, response.read()
     except urllib.error.HTTPError as exc:
         status, payload = exc.code, exc.read()
