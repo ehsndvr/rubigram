@@ -30,6 +30,9 @@ os.environ["WORKER_ACTION_DELAY_SECONDS"] = "0"
 os.environ["CELERY_BROKER_URL"] = "memory://"
 os.environ["ALLOWED_HOSTS"] = "testserver,localhost,127.0.0.1"
 os.environ["MEMBERSHIP_WORKER_ENV_FILE"] = os.path.join(_TMP, "missing.env")
+# Empty turns the egress check off. Tests never touch the network, and the
+# login flow measures its exit before asking Rubika for a code.
+os.environ["WORKER_EGRESS_ECHO_URL"] = ""
 
 import django  # noqa: E402
 
@@ -37,14 +40,17 @@ django.setup()
 
 from django.core.management import call_command  # noqa: E402
 from django.test import Client as HttpClient  # noqa: E402
+from django.utils import timezone  # noqa: E402
 
-from membership_worker.worker import accounts, items, jobs, recovery, rubika, tasks  # noqa: E402
+from membership_worker.worker import accounts, health, items, jobs, recovery, rubika, tasks  # noqa: E402
+from membership_worker.worker.exit import InvalidProxyUrl, describe_proxy, normalize_requested_proxy  # noqa: E402
 from membership_worker.worker.models import (  # noqa: E402
     AccountThrottle,
     MembershipJob,
     MembershipJobItem,
     WorkerAccount,
     WorkerAccountCredential,
+    WorkerAccountHealth,
     WorkerAutoLeaveSchedule,
     WorkerMembership,
     WorkerSignedNonce,
@@ -69,6 +75,7 @@ def clean_database():
         MembershipJob,
         WorkerMembership,
         AccountThrottle,
+        WorkerAccountHealth,
         WorkerAccountCredential,
         WorkerAccount,
         WorkerSignedNonce,
@@ -410,10 +417,15 @@ class FakeLoginClient:
     """Mimics the rubigram Client for the login flow; one instance per session name."""
 
     instances: dict[str, FakeLoginClient] = {}
+    #: Sessions Rubika refuses to authenticate — what a dead session looks like
+    #: to the health probe. A set rather than a flag on the instance, because the
+    #: probe builds a fresh client every time it looks.
+    dead: set[str] = set()
 
     def __init__(self, session_name: str, session_string: str | None = None, **kwargs):
         self.session_name = session_name
         self.restored_from = session_string
+        self.proxy = kwargs.get("proxy")
         self.storage = FakeStorage()
         self.codes: list[str] = []
         self.stopped = False
@@ -438,6 +450,10 @@ class FakeLoginClient:
         self.storage._guid = FakeUser.user_guid
 
     async def get_me(self):
+        if self.session_name in FakeLoginClient.dead:
+            from rubigram import errors
+
+            raise errors.InvalidAuth("ERROR_GENERIC", "INVALID_AUTH", {}, method="getUserInfo")
         return FakeMe()
 
     async def export_session_string(self):
@@ -446,16 +462,25 @@ class FakeLoginClient:
 
 @pytest.fixture
 def fake_login(monkeypatch):
+    """No Rubika, anywhere: the login flow and the health probe share one fake.
+
+    Both modules import ``build_client`` by name, so both have to be patched —
+    patching only the login one is how the probe quietly went to the real
+    network in a suite whose first rule is that it never does.
+    """
     FakeLoginClient.instances.clear()
-    monkeypatch.setattr(
-        accounts,
-        "build_client",
-        lambda session_name, session_string=None, **kwargs: FakeLoginClient(session_name, session_string, **kwargs),
-    )
+    FakeLoginClient.dead.clear()
+
+    def factory(session_name, session_string=None, **kwargs):
+        return FakeLoginClient(session_name, session_string, **kwargs)
+
+    monkeypatch.setattr(accounts, "build_client", factory)
+    monkeypatch.setattr(health, "build_client", factory)
     accounts._PENDING.clear()
     accounts._VERIFY_LOCKS.clear()
     yield
     accounts._PENDING.clear()
+    FakeLoginClient.dead.clear()
 
 
 def test_login_flow_stores_the_session_string(fake_login):
@@ -566,3 +591,153 @@ def test_callback_payload_and_bonus(monkeypatch):
         and payload["external_order_id"] == 7
     )
     assert json.loads(json.dumps(payload))["remote_order_id"] == str(job.id)
+
+
+# ── the exit a login leaves through ───────────────────────────────────────────
+
+
+def test_requested_proxy_is_validated_before_it_can_fail_in_the_transport():
+    assert normalize_requested_proxy(None) is None and normalize_requested_proxy("") is None
+    assert normalize_requested_proxy("  ") is None
+    assert normalize_requested_proxy("socks5://user:pw@host:1080") == "socks5://user:pw@host:1080"
+    for bad in ("host:1080", "ftp://host:21", "http://host", 5):
+        with pytest.raises(InvalidProxyUrl):
+            normalize_requested_proxy(bad)
+    # A log line must never carry the password the URL does.
+    assert describe_proxy("socks5://user:secret@host:1080") == "socks5://host:1080"
+    assert describe_proxy(None) == "direct"
+
+
+def test_login_leaves_through_the_exit_the_panel_named(fake_login):
+    proxy = "socks5://user:pw@exit.example:1080"
+    started = post("/internal/accounts/start-login/", {"username": "admin", "phone": "989120000010", "proxy": proxy}).json()
+    assert started["ok"]
+    # The Rubika connection itself was opened through it — not merely accepted.
+    assert FakeLoginClient.instances[started["session_name"]].proxy == proxy
+    # …and it is round-tripped, so a verify handled by another worker process
+    # answers from the same address instead of falling back to this machine's.
+    assert started["grpc_cookies"]["proxy"] == proxy
+    # Rubika never hands a code to Telegram, and the panel is told so outright.
+    assert started["code_via_telegram"] is False
+    assert started["sent_code_type"] == "SMS" and started["code_digits_count"] == 5
+    # No echo service is configured in tests, so there is nothing to report.
+    assert started["egress_ip"] is None
+
+    refused = post("/internal/accounts/start-login/", {"username": "admin", "phone": "989120000011", "proxy": "host:1080"})
+    assert refused.status_code == 422 and "proxy" in refused.json()["message"]
+
+
+# ── stats, health, probe, delete ──────────────────────────────────────────────
+
+
+def test_account_stats_answers_per_session_and_in_aggregate():
+    first, second = make_account(1), make_account(2)
+    second.status = WorkerAccount.Status.DISABLED
+    second.last_error = "JOIN_LIMIT_EXCEED"
+    second.save()
+    WorkerMembership.objects.create(account=first, target_key="user:x", target_display="@x", status=WorkerMembership.Status.JOINED)
+
+    body = post(
+        "/internal/accounts/stats/",
+        {"session_names": [first.session_name, second.session_name], "include_aggregate": True},
+    ).json()
+    assert body["ok"]
+    assert body["per_account"][first.session_name]["worker_status"] == "active"
+    assert body["per_account"][first.session_name]["joined"] == 1
+    assert body["per_account"][second.session_name]["worker_status"] == "disabled"
+    assert body["per_account"][second.session_name]["last_error"] == "JOIN_LIMIT_EXCEED"
+    assert body["aggregate"] == {"total": 2, "active": 1, "disabled": 1, "error": 0, "total_joined": 1}
+
+    # Asked about nothing is not asked about everything: a caller with an empty
+    # page must not be handed somebody else's numbers.
+    assert post("/internal/accounts/stats/", {"session_names": []}).json()["per_account"] == {}
+    assert post("/internal/accounts/stats/", {"session_names": ["nope"]}).json()["per_account"] == {}
+    assert post("/internal/accounts/stats/", {"session_names": ["x"] * 501}).status_code == 413
+
+
+def test_health_reports_unknown_until_something_has_actually_looked():
+    account = make_account(1)
+    body = post("/internal/accounts/health/", {"session_names": [account.session_name]}).json()
+    # Never probed is its own answer, and it is not "fine".
+    assert body["total"] == 1 and body["unknown"] == 1 and body["available"] == 0
+    assert body["per_account"][account.session_name]["availability"] == "unknown"
+    assert body["last_scan_at"] is None
+
+    WorkerAccountHealth.objects.create(
+        account=account, availability=WorkerAccountHealth.Availability.AVAILABLE, outcome="alive", last_checked_at=timezone.now()
+    )
+    body = post("/internal/accounts/health/", {"session_names": [account.session_name]}).json()
+    assert body["available"] == 1 and body["unknown"] == 0 and body["last_scan_at"]
+    assert body["per_account"][account.session_name]["availability"] == "available"
+
+
+def test_probe_records_a_verdict_and_reactivates_a_wrongly_disabled_account(fake_login):
+    account = make_account(1)
+    account.status = WorkerAccount.Status.DISABLED
+    account.last_error = "connection error: socket closed"
+    account.save()
+
+    body = post("/internal/accounts/probe/", {"session_names": [account.session_name, "no-such-session"]}).json()
+    verdict = body["per_account"][account.session_name]
+    assert verdict["alive"] is True and verdict["outcome"] == "alive" and verdict["availability"] == "available"
+    # A session that authenticates now is one the job pipeline was wrong about.
+    account.refresh_from_db()
+    assert account.status == WorkerAccount.Status.ACTIVE and account.last_error == ""
+    # "this worker has no such account" is a different answer from "it failed".
+    assert body["missing"] == ["no-such-session"] and "no-such-session" not in body["per_account"]
+
+    # The verdict is persisted, so the health rollup reflects it afterwards.
+    assert post("/internal/accounts/health/", {"session_names": [account.session_name]}).json()["available"] == 1
+    assert post("/internal/accounts/probe/", {"session_names": []}).status_code == 422
+    assert post("/internal/accounts/probe/", {"session_names": ["x"] * 51}).status_code == 413
+
+
+def test_a_refused_session_is_only_called_dead_the_second_time(fake_login):
+    account = make_account(1)
+    FakeLoginClient.dead.add(account.session_name)
+
+    first = health.probe_sessions([account.session_name])[0][account.session_name]
+    # One refusal is as likely to be the route as the session, so it costs the
+    # account nothing yet.
+    assert first.outcome == "auth_fail" and first.availability == "unknown"
+    account.refresh_from_db()
+    assert account.status == WorkerAccount.Status.ACTIVE
+
+    second = health.probe_sessions([account.session_name])[0][account.session_name]
+    assert second.outcome == "auth_fail" and second.availability == "dead"
+    account.refresh_from_db()
+    assert account.status == WorkerAccount.Status.DISABLED
+
+    # And the sweep uses the same verdict path, so it agrees with the probe.
+    FakeLoginClient.dead.discard(account.session_name)
+    assert health.scan_accounts(limit=10) == 1
+    account.refresh_from_db()
+    assert account.status == WorkerAccount.Status.ACTIVE
+
+
+def test_capacity_is_read_from_the_refusal_a_join_already_recorded():
+    # Rubika offers no read-only way to ask whether an account is full: a
+    # capacity-limited session identifies itself perfectly and only a *join*
+    # comes back refused. So the signal is the error the pipeline recorded.
+    assert health.is_capacity_error("JOIN_LIMIT_EXCEED") is True
+    assert health.is_capacity_error("ظرفیت عضویت پر است") is True
+    assert health.is_capacity_error("connection error: socket closed") is False
+
+
+def test_delete_removes_the_session_and_is_safe_to_repeat():
+    account = make_account(1)
+    session_name = account.session_name
+    body = post("/internal/accounts/delete/", {"session_name": session_name}).json()
+    assert body["deleted"] == 1 and body["sessions"] == [session_name]
+    # The session string goes with the row; that is the half that matters.
+    assert not WorkerAccount.objects.filter(session_name=session_name).exists()
+    assert not WorkerAccountCredential.objects.filter(account__session_name=session_name).exists()
+
+    # A row already gone is 200 and deleted=0 — a panel retry is not a failure.
+    again = post("/internal/accounts/delete/", {"session_name": session_name})
+    assert again.status_code == 200 and again.json()["deleted"] == 0
+
+    other = make_account(2)
+    assert post("/internal/accounts/delete/", {"phone": other.phone}).json()["deleted"] == 1
+    assert post("/internal/accounts/delete/", {}).status_code == 422
+    assert post("/internal/accounts/delete/", {"account_id": "not-a-number"}).status_code == 422

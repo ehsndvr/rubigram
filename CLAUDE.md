@@ -32,9 +32,12 @@ python membership_worker/manage.py migrate                     # the worker serv
   unknown keys land in `.extra`. Bot payloads are in `rubigram/types/bot/`.
 - `rubigram/network/` transports know nothing about methods; `rubigram/storage/`
   knows nothing about the network.
-- `membership_worker/` is a Django + Celery service on top of the library
-  (`worker/rubika.py` is the only module that calls rubigram; `jobs.py`,
-  `items.py`, `recovery.py` are pure bookkeeping; `views.py` is the signed API).
+- `membership_worker/` is a Django + Celery service on top of the library.
+  Everything that opens a Rubika connection goes through `worker/rubika.py`'s
+  `build_client` — `accounts.py` (the panel-driven login) and `health.py` (the
+  read-only account probe) are the only callers; `jobs.py`, `items.py`,
+  `recovery.py` are pure bookkeeping; `exit.py` validates the per-call proxy and
+  measures what address it comes out on; `views.py` is the signed API.
   `rubigram_internal/signing.py` is the HMAC scheme shared with the panel and
   must stay wire-compatible with balegram's. Its tests live in
   `tests/test_membership_worker.py` and use a temporary SQLite database with

@@ -70,9 +70,9 @@ The panel's "add number" flow maps onto Rubika's login:
 
 | Endpoint | Rubika | Notes |
 |---|---|---|
-| `POST /internal/accounts/start-login/` `{username, phone}` | `sendCode` | returns `transaction_hash` (= `phone_code_hash`), `session_name`, `device_hash`, and the pending state in `grpc_cookies` / `login_state` |
-| `POST /internal/accounts/verify-code/` `{session_name, transaction_hash, code, grpc_cookies}` | `signIn` | stores the session string; `requires_signup: true` when the phone has no account |
-| `POST /internal/accounts/signup/` `{…, display_name}` | `signUp` | unverified against the live server |
+| `POST /internal/accounts/start-login/` `{username, phone, proxy?}` | `sendCode` | returns `transaction_hash` (= `phone_code_hash`), `session_name`, `device_hash`, the pending state in `grpc_cookies` / `login_state`, and where the code went (below) |
+| `POST /internal/accounts/verify-code/` `{session_name, transaction_hash, code, grpc_cookies, proxy?}` | `signIn` | stores the session string; `requires_signup: true` when the phone has no account |
+| `POST /internal/accounts/signup/` `{…, display_name, proxy?}` | `signUp` | unverified against the live server |
 | `POST /internal/accounts/cancel-login/` | – | drops the pending login |
 
 The pending state is a rubigram session string *without* `auth` (temporary
@@ -80,6 +80,58 @@ session, login key pair, DC list), so any worker process can finish a login
 another one started. Accounts with two-step verification are refused with a
 Persian message, as the panel has no password step. Responses carry
 `auth_id = user guid` and `user_id = null` (Rubika has no numeric ids).
+
+**Where the code goes.** `start-login` answers `sent_code_type` (`SMS` or
+`Internal`), `code_digits_count` (five) and `code_via_telegram: false`. The last
+one is stated rather than left out, because a missing field reads as *unknown*:
+Bale and Soroush hand a foreign number's code to Telegram, which is what lets a
+panel register from a `.session` file with nobody typing anything, and Rubika
+never does. A caller waiting for a Rubika code in a Telegram chat waits until it
+has expired.
+
+**The exit.** `proxy` is the address *this* login leaves from, and it beats
+`WORKER_PROXY` for the call. It exists because the panel picks an exit country
+per registration and, until the worker read the field, that choice moved only
+the panel's own hop — the connection Rubika sees is the one opened here. It is
+validated (scheme, host, port) and refused with **422** when malformed, rather
+than failing several layers down as a connection error that blames Rubika. It is
+also returned inside `login_state`, so a verify finished by a *different* worker
+process still answers from the address the code went out on. `egress_ip` on the
+answer is what an echo service actually saw through it — evidence, not a
+promise, and never a reason for a login to fail.
+
+## Account status, health and removal
+
+Four endpoints the panel uses once a number is registered. None of them is
+required to register one; all four answer for accounts this worker owns.
+
+| Endpoint | Reads | Notes |
+|---|---|---|
+| `POST /internal/accounts/stats/` `{session_names[], account_ids[], include_aggregate}` | the database | `per_account[<session>]` → `worker_status`, `last_error`, `joined`, … plus the worker-wide rollup when asked. Two queries whatever the batch; capped at 500 |
+| `POST /internal/accounts/health/` `{session_names[]}` | the last probe | the `{total, available, at_capacity, dead, unknown, last_scan_at}` rollup always, `per_account` when names are given. Never connects to Rubika |
+| `POST /internal/accounts/probe/` `{session_names[], timeout?}` | Rubika, now | connects as each session and answers `{alive, outcome, availability, detail}`; `missing` names the sessions this worker does not have. Read-only, capped at 50 |
+| `POST /internal/accounts/delete/` `{account_id \| session_name \| phone}` | – | removes the account row and its session string. Idempotent: a row already gone is `deleted: 0` and **200**, so a panel retry is safe |
+
+`worker_status` and `availability` answer different questions and the panel shows
+both. The first is what the *job pipeline* last ran into, and it is noisy — a
+dropped connection disables an account that is perfectly healthy. The second is
+written only by a probe that connected on purpose:
+
+* `available` — the session authenticated and nothing says it is full;
+* `at_capacity` — it has hit Rubika's ceiling on joined channels. Rubika offers
+  no read-only way to ask (a full account reads and identifies itself normally;
+  only a *join* comes back refused), so this is recognised from the error a join
+  already recorded, never from the probe;
+* `dead` — refused authentication **twice running**. The hysteresis is the
+  point: one refusal is as likely to be the route as the session;
+* `unknown` — never probed, or only ever failed transiently. Said out loud,
+  because "we have not looked" and "we looked and it is fine" are answers an
+  operator must be able to tell apart.
+
+A probe that finds a *disabled* account alive reactivates it, since a session
+that authenticates now is one the pipeline was wrong about. The periodic sweep
+(`membership_worker.scan_account_health`, every `HEALTH_SCAN_INTERVAL_SECONDS`)
+works round the table oldest-verdict-first and uses the same verdict path.
 
 ## Configuration
 
@@ -93,7 +145,9 @@ the file. The important ones:
 | `WORKER_SIGNATURE_HEADER_PREFIX` | header names on callbacks (`X-Balegram` for the balegram panel; `X-Rubigram` is accepted on incoming requests as well) |
 | `WORKER_ACTION_DELAY_SECONDS`, `WORKER_ACTION_TIMEOUT_SECONDS` | pacing and per-request timeout |
 | `WORKER_BONUS_PERCENTAGE`, `WORKER_JOB_MAX_WAIT_HOURS` | join buffer and how long missing slots are refilled |
-| `WORKER_USER_AGENT`, `WORKER_DEVICE_HASH`, `WORKER_SYSTEM_VERSION`, `WORKER_DEVICE_MODEL`, `WORKER_PROXY` | the identity and network path of every Rubika client |
+| `WORKER_USER_AGENT`, `WORKER_DEVICE_HASH`, `WORKER_SYSTEM_VERSION`, `WORKER_DEVICE_MODEL`, `WORKER_PROXY` | the identity and network path of every Rubika client (a per-call `proxy` beats `WORKER_PROXY`) |
+| `WORKER_EGRESS_ECHO_URL`, `WORKER_EGRESS_TIMEOUT_SECONDS` | where "which address did Rubika see?" is asked. Empty turns the check off — right for a deployment with no outbound to it |
+| `HEALTH_SCAN_INTERVAL_SECONDS`, `HEALTH_SCAN_BATCH` | how often the read-only health sweep runs, and how many accounts each pass probes |
 | `DATABASE_*`, `CELERY_BROKER_URL` | storage and broker |
 
 ## Running

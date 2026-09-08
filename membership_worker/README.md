@@ -17,6 +17,10 @@ Signed internal endpoints (HMAC headers, nonce replay protection):
 | `POST` | `/internal/accounts/signup/` | `signUp` for a phone without an account |
 | `POST` | `/internal/accounts/cancel-login/` | drop a pending login |
 | `GET` | `/internal/accounts/available/` | number of active accounts |
+| `POST` | `/internal/accounts/stats/` | per-account worker status and job counts, plus the rollup |
+| `POST` | `/internal/accounts/health/` | availability as the last read-only probe recorded it |
+| `POST` | `/internal/accounts/probe/` | connect as these sessions now and report whether they still work |
+| `POST` | `/internal/accounts/delete/` | remove an account row and its session string (idempotent) |
 
 Full description: [docs/membership-worker.md](../docs/membership-worker.md).
 
