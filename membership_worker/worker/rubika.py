@@ -91,7 +91,17 @@ def worker_device_hash() -> str:
     return str(settings.WORKER_DEVICE_HASH or device_hash_from_user_agent(worker_user_agent()))
 
 
-def client_kwargs(*, timeout: Optional[float] = None) -> dict[str, Any]:
+def client_kwargs(*, timeout: Optional[float] = None, proxy: Optional[str] = None) -> dict[str, Any]:
+    """Client options for one throw-away Rubika client.
+
+    ``proxy`` is the exit *this call* was told to leave through, and it wins over
+    ``WORKER_PROXY``.  The setting is this worker's own default — where every
+    call goes when nobody said otherwise — while the argument is one
+    registration's stated requirement, picked by the panel for the country the
+    number belongs to.  Falling back to the default when the panel has named an
+    exit would put the login somewhere the operator did not choose and report
+    success anyway, which is the whole failure this argument exists to end.
+    """
     per_request = float(timeout or settings.WORKER_ACTION_TIMEOUT_SECONDS)
     return {
         "in_memory": True,
@@ -104,13 +114,19 @@ def client_kwargs(*, timeout: Optional[float] = None) -> dict[str, Any]:
         "device_hash": worker_device_hash(),
         "system_version": str(settings.WORKER_SYSTEM_VERSION),
         "device_model": str(settings.WORKER_DEVICE_MODEL),
-        "proxy": str(settings.WORKER_PROXY) or None,
+        "proxy": proxy or str(settings.WORKER_PROXY) or None,
     }
 
 
-def build_client(session_name: str, session_string: Optional[str] = None, *, timeout: Optional[float] = None) -> Client:
+def build_client(
+    session_name: str,
+    session_string: Optional[str] = None,
+    *,
+    timeout: Optional[float] = None,
+    proxy: Optional[str] = None,
+) -> Client:
     """A throw-away client; with a session string it skips DC discovery and the base-info refresh."""
-    kwargs = client_kwargs(timeout=timeout)
+    kwargs = client_kwargs(timeout=timeout, proxy=proxy)
     if session_string:
         return Client.from_session_string(session_name, session_string, discover_dcs=False, refresh_base_info=False, **kwargs)
     return Client(session_name, **kwargs)

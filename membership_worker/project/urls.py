@@ -11,4 +11,8 @@ urlpatterns = [
     path("internal/accounts/signup/", views.internal_signup_view, name="worker-signup"),
     path("internal/accounts/cancel-login/", views.internal_cancel_login_view, name="worker-cancel-login"),
     path("internal/accounts/available/", views.internal_available_accounts_view, name="worker-available-accounts"),
+    path("internal/accounts/stats/", views.internal_account_stats_view, name="worker-account-stats"),
+    path("internal/accounts/health/", views.internal_account_health_view, name="worker-account-health"),
+    path("internal/accounts/probe/", views.internal_account_probe_view, name="worker-account-probe"),
+    path("internal/accounts/delete/", views.internal_delete_account_view, name="worker-delete-account"),
 ]

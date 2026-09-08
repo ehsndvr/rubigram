@@ -47,6 +47,62 @@ class WorkerAccountCredential(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class WorkerAccountHealth(models.Model):
+    """What the last read-only probe found out about an account.
+
+    Kept beside :class:`WorkerAccount` rather than on it, because the two answer
+    different questions and one of them is far less trustworthy than it looks.
+    ``WorkerAccount.status`` is set by whatever the *last job* ran into — a
+    dropped connection or a decode glitch disables an account that is perfectly
+    healthy — while this row is written only by a probe that connected on
+    purpose and knows what it found.
+
+    ``availability`` is the one word the panel reads:
+
+    * ``available``  — the session authenticated, and nothing says it is full.
+    * ``at_capacity`` — it has hit Rubika's ceiling on joined channels.  Rubika,
+      like Bale, offers no read-only way to ask: the only authoritative signal is
+      a join that came back refused, so this is recognised from the recorded
+      ``last_error`` and never from the probe itself.
+    * ``dead``       — the session no longer authenticates, twice running.  The
+      hysteresis is the point: one refusal is as likely to be the network.
+    * ``unknown``    — never probed, or only ever failed transiently.  Said out
+      loud rather than guessed at, because "we have not looked" and "we looked
+      and it is fine" are answers an operator must be able to tell apart.
+    """
+
+    class Availability(models.TextChoices):
+        AVAILABLE = "available", "Available"
+        AT_CAPACITY = "at_capacity", "At capacity"
+        DEAD = "dead", "Dead"
+        UNKNOWN = "unknown", "Unknown"
+
+    # Probe outcomes, as recorded. Narrower than `availability`: this says what
+    # happened on the wire, that says what it means for the account.
+    ALIVE = "alive"
+    AUTH_FAIL = "auth_fail"
+    TRANSIENT = "transient"
+
+    account = models.OneToOneField(WorkerAccount, on_delete=models.CASCADE, related_name="health")
+    availability = models.CharField(max_length=16, choices=Availability.choices, default=Availability.UNKNOWN)
+    outcome = models.CharField(max_length=16, blank=True)
+    detail = models.TextField(blank=True)
+    #: Consecutive probes that were refused authentication. See DEAD_THRESHOLD.
+    consecutive_auth_failures = models.PositiveIntegerField(default=0)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["availability"]),
+            # The scan's own order: "whatever was checked longest ago, first".
+            models.Index(fields=["last_checked_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account_id}: {self.availability}"
+
+
 class AccountThrottle(models.Model):
     account = models.OneToOneField(WorkerAccount, on_delete=models.CASCADE, related_name="throttle")
     next_available_at = models.DateTimeField(null=True, blank=True)

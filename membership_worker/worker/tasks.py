@@ -82,3 +82,17 @@ def retry_job_slot_fill_task(job_id: int) -> None:
     from .jobs import finalize_job_if_done
 
     finalize_job_if_done(job_id)
+
+
+@shared_task(name="membership_worker.scan_account_health", queue="default", soft_time_limit=600, time_limit=660)
+def scan_account_health_task(limit: int = 100) -> int:
+    """Probe the accounts nobody has looked at for longest.
+
+    On the ``default`` queue rather than ``membership``: it opens connections but
+    never acts as an account, and a health sweep must not sit behind a queue of
+    join orders — the moment its answer is worth having is the moment the joins
+    are failing.
+    """
+    from .health import scan_accounts
+
+    return scan_accounts(limit=limit)

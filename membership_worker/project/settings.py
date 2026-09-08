@@ -119,6 +119,12 @@ WORKER_DEVICE_HASH = env("WORKER_DEVICE_HASH")  # empty → derived from the use
 WORKER_SYSTEM_VERSION = env("WORKER_SYSTEM_VERSION", "Windows 10")
 WORKER_DEVICE_MODEL = env("WORKER_DEVICE_MODEL", "Chrome 145")
 WORKER_PROXY = env("WORKER_PROXY")  # optional http(s)://, socks5:// proxy for every Rubika call
+# Where "which address did Rubika see?" is asked. Empty turns the check off,
+# which is the right answer for a deployment with no outbound to it: the
+# measurement is evidence, never a precondition, and a login must not wait on
+# a service that cannot answer.
+WORKER_EGRESS_ECHO_URL = env("WORKER_EGRESS_ECHO_URL", "https://api.ipify.org")
+WORKER_EGRESS_TIMEOUT_SECONDS = env_float("WORKER_EGRESS_TIMEOUT_SECONDS", 8.0)
 WORKER_VIEW_POST_COUNTS = {"4": 1, "5": 5, "6": 10, "7": 20, "8": 30}  # service_id → posts viewed per account
 WORKER_THROTTLE_CONN_ERROR_SECONDS = env_int("WORKER_THROTTLE_CONN_ERROR_SECONDS", 60)
 WORKER_THROTTLE_TOO_REQUESTS_SECONDS = env_int("WORKER_THROTTLE_TOO_REQUESTS_SECONDS", 3600)
@@ -152,6 +158,13 @@ CELERY_BEAT_SCHEDULE = {
     "recover-stale-running-items": {"task": "membership_worker.recover_stale_running_items", "schedule": 30.0},
     "recover-stale-pending-items": {"task": "membership_worker.recover_stale_pending_items", "schedule": 60.0},
     "recover-stale-inprogress-jobs": {"task": "membership_worker.recover_stale_inprogress_jobs", "schedule": 30.0},
+    # Read-only, and paced by how stale an answer may get rather than by how
+    # fast it could run: every sweep is one live connection per account.
+    "scan-account-health": {
+        "task": "membership_worker.scan_account_health",
+        "schedule": env_float("HEALTH_SCAN_INTERVAL_SECONDS", 900.0),
+        "kwargs": {"limit": env_int("HEALTH_SCAN_BATCH", 100)},
+    },
 }
 
 LOGGING = {
