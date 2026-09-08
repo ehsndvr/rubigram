@@ -107,9 +107,14 @@ celery -A membership_worker.project.celery worker -l info -Q membership,callback
 celery -A membership_worker.project.celery beat -l info
 ```
 
-Production recipes: `docker/worker.Dockerfile` + `docker/server2/docker-compose.yml`
-(PostgreSQL, Redis, API, worker, beat, nginx) or the systemd units and
-`deploy.sh` in `deploy/server2/`.
+Production recipes:
+
+- **Dokploy** (recommended): `docker/server2/dokploy-compose.yml` with managed
+  PostgreSQL and Redis; guide, environment template, nginx site, cutover script
+  and a signed smoke test in [`deploy/dokploy/`](../deploy/dokploy/README.md).
+- **Plain Docker Compose**: `docker/server2/docker-compose.yml` (PostgreSQL,
+  Redis, API, worker, beat, nginx).
+- **systemd**: the units and `deploy.sh` in `deploy/server2/`.
 
 ## Tests
 

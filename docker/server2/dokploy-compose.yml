@@ -1,0 +1,66 @@
+# rubigram membership worker — stack for a DOKPLOY "Compose" service.
+#
+# Differs from the self-contained docker-compose.yml next to it:
+#   - no postgres / redis  → Dokploy-managed databases reached over the external
+#                            `dokploy-network` by their internal hostnames
+#                            (DATABASE_HOST / CELERY_BROKER_URL in the Dokploy env).
+#   - no nginx             → either add a Domain in Dokploy (Traefik terminates TLS
+#                            and routes to worker-api:8001), or keep the host's nginx
+#                            and proxy it to the published port (deploy/dokploy/nginx-worker.conf).
+#   - no session volume    → rubigram sessions live in the database as session strings.
+#
+# Dokploy: Compose Path = docker/server2/dokploy-compose.yml, env from the
+# Environment tab (written to .env next to this file at deploy time).
+services:
+  worker-api:
+    build:
+      context: ../..
+      dockerfile: docker/worker.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${WORKER_PORT:-8092}:8001"   # for a host nginx; harmless when a Dokploy domain is used instead
+    networks:
+      - dokploy-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket,sys; s=socket.socket(); s.settimeout(4); sys.exit(s.connect_ex(('127.0.0.1',8001)))\""]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 25s
+
+  worker-celery:
+    build:
+      context: ../..
+      dockerfile: docker/worker.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+    command: celery -A membership_worker.project.celery worker -l INFO -Q membership,callbacks,default --concurrency=${CELERY_WORKER_CONCURRENCY:-8}
+    env_file: .env
+    networks:
+      - dokploy-network
+    depends_on:
+      worker-api:
+        condition: service_started
+
+  worker-beat:
+    build:
+      context: ../..
+      dockerfile: docker/worker.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+    command: celery -A membership_worker.project.celery beat -l INFO
+    env_file: .env
+    networks:
+      - dokploy-network
+    depends_on:
+      worker-api:
+        condition: service_started
+
+networks:
+  dokploy-network:
+    external: true

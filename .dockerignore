@@ -1,0 +1,34 @@
+# never bake these into an image
+.git
+.gitignore
+.github
+.claude
+__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+dist
+build
+.venv
+venv
+.ruff_cache
+.pytest_cache
+.pytest_tmp
+
+# runtime data and secrets
+*.session
+*.session-journal
+*.sqlite3
+membership_worker/data/
+.env
+membership_worker/.env
+docker/**/.env
+
+# not needed to build
+docs/
+examples/
+tests/
+tools/
+deploy/
+.DS_Store
+._*

@@ -8,6 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev \
 
 WORKDIR /app
 
+# a PyPI mirror for servers that cannot reach pypi.org (build arg, see dokploy-compose.yml)
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+
 # 1. the library and the signing helper
 COPY pyproject.toml README.md LICENSE ./
 COPY rubigram/ ./rubigram/

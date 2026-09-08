@@ -101,7 +101,8 @@ The same `Client` class serves both; shared methods (`send_message`,
 pool of Rubika accounts (session strings in its database) and executes
 join / leave / view orders received over a signed HTTP API, reporting back with
 signed callbacks. It speaks the same protocol as the balegram worker, so the
-same panel drives both. See [docs/membership-worker.md](docs/membership-worker.md).
+same panel drives both. See [docs/membership-worker.md](docs/membership-worker.md)
+and, for hosting it, [deploy/dokploy/README.md](deploy/dokploy/README.md).
 
 ## Development
 

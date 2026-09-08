@@ -39,7 +39,7 @@ broker) must be reachable at `CELERY_BROKER_URL`.
 
 ## Production
 
-PostgreSQL, Redis, Daphne behind nginx, three systemd units or the Docker
-compose file: see [`deploy/server2/`](../deploy/server2) and
-[`docker/`](../docker). Keep the service on a private network or behind an IP
+Dokploy (recommended): [`deploy/dokploy/README.md`](../deploy/dokploy/README.md)
+with `docker/server2/dokploy-compose.yml`. Plain Docker Compose:
+[`docker/server2/`](../docker/server2). systemd: [`deploy/server2/`](../deploy/server2). Keep the service on a private network or behind an IP
 allow-list; every request is also HMAC-signed.
