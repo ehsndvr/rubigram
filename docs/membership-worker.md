@@ -27,7 +27,15 @@ worker ──signed HTTPS──▶ panel callback              order_accepted / 
      reserved by another running join for it; the count is inflated by
      `WORKER_BONUS_PERCENTAGE`. No free account → `422 insufficient_capacity`.
    - **leave**: accounts recorded as members of the target.
-   - **view**: any active accounts, cycled to reach the count.
+   - **view**: distinct active accounts, never the same account twice (a repeat view adds nothing
+     to a post's counter, so the pool is not cycled). Accounts that viewed the same `target_key`
+     within `WORKER_VIEW_REVIEW_COOLDOWN_HOURS` (default 15; ledger `WorkerPostView`, written when a
+     view succeeds) and accounts reserved by another running view job on it are skipped. Fewer
+     eligible than asked: the order takes what it can, the shortfall is `skipped_count`, and it
+     settles `partial` so the panel refunds the undelivered part. None eligible: `422
+     insufficient_capacity`. A view that fails is retried with a *new* account, never one the job
+     already used. The ledger is keyed by the order's own target key, so a channel and one of its
+     post links are different targets and **views are not de-duplicated across them**.
 3. One `MembershipJobItem` per account is queued on Celery. Each item opens a
    short-lived rubigram client from the stored session string (HTTP only,
    no socket, DC list taken from the session), performs the action, and
@@ -38,6 +46,31 @@ worker ──signed HTTPS──▶ panel callback              order_accepted / 
    with other accounts while some remain eligible.
 5. With `retention_days`, an auto-leave is scheduled per joined account; beat
    runs them and the job moves from `active` to `completed`.
+
+## The balegram panel's Rubika platform
+
+The panel gives Rubika the service-id block 301-399 and sends the id as-is in
+`service_id`; callbacks are verified under `X-Rubigram-*` (set
+`WORKER_SIGNATURE_HEADER_PREFIX=X-Rubigram`, the default).
+
+| Panel ids | Order | Worker behaviour |
+|---|---|---|
+| 301, 302, 349, 350 | join (30 / 7 / 60 / 90 d) | `service_id` is stored only; `retention_days` drives the auto-leave |
+| 304 | view, one post | a post link views that post; a channel views its latest post |
+| 305 / 306 / 307 / 308 | view, latest 5 / 10 / 20 / 30 posts | `WORKER_VIEW_POST_COUNTS`, looked up by `service_id % 100`, so the local ids 4-8 work too |
+
+A view order whose id is not in that table is refused at creation (`422`, message
+`unknown view service_id …`) instead of viewing a default number of posts. The panel
+does not cancel on an unrecognised 422, it retries and records the message as the
+order's dispatch error, so the refusal is a safety net, not a customer-facing text.
+
+`POST /internal/orders/` answers `202 {remote_order_id, accepted_count,
+skipped_count, status}`; `422 insufficient_capacity` (`requested_count`,
+`available_count`) when no account could ever take a join; `503 pool_busy` (same
+counts) when accounts exist but a concurrent order holds them right now. The panel
+refunds on the first and retries the second. A failed order caused by a bad target
+carries a Persian `error` in its callback; the worker's own diagnostics are never
+sent.
 
 ## Rubika specifics
 
@@ -142,8 +175,9 @@ the file. The important ones:
 |---|---|
 | `WORKER_SHARED_SECRET` | HMAC secret shared with the panel |
 | `WORKER_PROVIDER` | name reported to the panel (`rubigram-worker`) |
-| `WORKER_SIGNATURE_HEADER_PREFIX` | header names on callbacks (`X-Balegram` for the balegram panel; `X-Rubigram` is accepted on incoming requests as well) |
+| `WORKER_SIGNATURE_HEADER_PREFIX` | header names on callbacks (default `X-Rubigram`, which is what the balegram panel verifies for its Rubika platform; a panel that drives this worker as a Bale-style worker needs `X-Balegram`). Incoming requests are accepted under either namespace |
 | `WORKER_ACTION_DELAY_SECONDS`, `WORKER_ACTION_TIMEOUT_SECONDS` | pacing and per-request timeout |
+| `WORKER_VIEW_REVIEW_COOLDOWN_HOURS` | how long an account that viewed a target is left out of new view orders for it (default 15) |
 | `WORKER_BONUS_PERCENTAGE`, `WORKER_JOB_MAX_WAIT_HOURS` | join buffer and how long missing slots are refilled |
 | `WORKER_USER_AGENT`, `WORKER_DEVICE_HASH`, `WORKER_SYSTEM_VERSION`, `WORKER_DEVICE_MODEL`, `WORKER_PROXY` | the identity and network path of every Rubika client (a per-call `proxy` beats `WORKER_PROXY`) |
 | `WORKER_EGRESS_ECHO_URL`, `WORKER_EGRESS_TIMEOUT_SECONDS` | where "which address did Rubika see?" is asked. Empty turns the check off — right for a deployment with no outbound to it |
@@ -186,3 +220,9 @@ mechanism (fetch + `seenChats`) is what the web client does when a channel is
 opened and is assumed to count as a view. `signUp` and the reaction of Rubika
 to many joins from one IP were not observed. Run a small order against a test
 channel before trusting the counters.
+
+Specifically for views: nothing in this repo proves that `seenChats` raises a
+channel post's public view counter. The worker cannot check it either, because it
+reads no view counter before or after (`view_count_before/after` are never sent, so
+the panel shows no «قبل/بعد» for Rubika views). Verify one 304 order against a test
+post, reading the counter in a Rubika client, before selling views.

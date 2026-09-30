@@ -19,8 +19,10 @@ from .models import (
     WorkerAccount,
     WorkerAutoLeaveSchedule,
     WorkerMembership,
+    WorkerPostView,
     WorkerSignedNonce,
 )
+from .rubika import view_post_count
 from .targets import TargetError, normalize_target_key
 
 log = logging.getLogger("membership_worker.jobs")
@@ -41,6 +43,24 @@ class InsufficientCapacityError(WorkerServiceError):
         super().__init__("Insufficient available accounts for target.")
         self.requested_count = requested_count
         self.available_count = available_count
+
+
+class PoolBusyError(WorkerServiceError):
+    """Accounts exist for this join but none was free at that instant (a concurrent order holds their rows).
+
+    Transient by definition: the panel retries a ``pool_busy`` 503 and never cancels on it, unlike
+    ``insufficient_capacity``, which it treats as final and refunds.
+    """
+
+    def __init__(self, *, requested_count: int, available_count: int) -> None:
+        super().__init__("Accounts are busy with another order; retry shortly.")
+        self.requested_count = requested_count
+        self.available_count = available_count
+
+
+# Persian text the panel stores as the order's ``error_message`` (customer-visible), so it says what the
+# customer can act on and nothing about the account pool.
+INVALID_TARGET_MESSAGE = "مقصد سفارش نامعتبر است یا پیدا نشد."
 
 
 def apply_bonus(count: int) -> int:
@@ -70,6 +90,24 @@ def remember_nonce(nonce: str) -> bool:
 # ── account selection ────────────────────────────────────────────────────────────
 
 
+def view_candidates(target_key: str):
+    """Active accounts that may view ``target_key`` now: not viewed within the cooldown, not reserved by a running view job."""
+    cutoff = timezone.now() - timedelta(hours=float(settings.WORKER_VIEW_REVIEW_COOLDOWN_HOURS))
+    viewed_ids = WorkerPostView.objects.filter(target_key=target_key, viewed_at__gt=cutoff).values("account_id")
+    reserved_ids = MembershipJobItem.objects.filter(
+        job__action=MembershipJob.Action.VIEW,
+        job__target_key=target_key,
+        job__status__in=ACTIVE_JOB_STATUSES,
+        status__in=RESERVED_ITEM_STATUSES,
+    ).values("account_id")
+    return (
+        WorkerAccount.objects.filter(status=WorkerAccount.Status.ACTIVE)
+        .exclude(id__in=viewed_ids)
+        .exclude(id__in=reserved_ids)
+        .order_by("id")
+    )
+
+
 def select_accounts(
     *, action: str, target_key: str, count: int, exclude_account_ids: Optional[list[int]] = None, lock: bool = False
 ) -> list[WorkerAccount]:
@@ -92,13 +130,16 @@ def select_accounts(
         ).values_list("account_id", flat=True)
         return list(active.exclude(id__in=joined_ids).exclude(id__in=reserved_ids)[:count])
     if action == MembershipJob.Action.VIEW:
-        pool_qs = WorkerAccount.objects.filter(status=WorkerAccount.Status.ACTIVE).order_by("id")
+        # Distinct accounts only: a second view by the same account does not move the counter, so the
+        # pool is never cycled to reach ``count``. Short of accounts, the caller accepts what it got and
+        # the shortfall is refunded. View items skip the join throttle, so ``active`` (which drops
+        # throttled accounts) is not used here.
+        pool_qs = view_candidates(target_key)
         if lock:
             pool_qs = pool_qs.select_for_update(skip_locked=True)
         if exclude_account_ids:
             pool_qs = pool_qs.exclude(id__in=exclude_account_ids)
-        pool = list(pool_qs)
-        return [pool[i % len(pool)] for i in range(count)] if pool else []
+        return list(pool_qs[:count])
     memberships = (
         WorkerMembership.objects.filter(
             target_key=target_key, status=WorkerMembership.Status.JOINED, account__status=WorkerAccount.Status.ACTIVE
@@ -107,6 +148,27 @@ def select_accounts(
         .order_by("-joined_at", "-updated_at")[:count]
     )
     return [membership.account for membership in memberships]
+
+
+def count_free_accounts(action: str, target_key: str) -> int:
+    """Accounts that could take ``action`` on ``target_key`` right now — counted without row locks."""
+    if action == MembershipJob.Action.VIEW:
+        return view_candidates(target_key).count()
+    throttled_ids = AccountThrottle.objects.filter(next_available_at__gt=timezone.now()).values("account_id")
+    joined_ids = WorkerMembership.objects.filter(target_key=target_key, status=WorkerMembership.Status.JOINED).values("account_id")
+    reserved_ids = MembershipJobItem.objects.filter(
+        job__action=MembershipJob.Action.JOIN,
+        job__target_key=target_key,
+        job__status__in=ACTIVE_JOB_STATUSES,
+        status__in=RESERVED_ITEM_STATUSES,
+    ).values("account_id")
+    return (
+        WorkerAccount.objects.filter(status=WorkerAccount.Status.ACTIVE)
+        .exclude(id__in=throttled_ids)
+        .exclude(id__in=joined_ids)
+        .exclude(id__in=reserved_ids)
+        .count()
+    )
 
 
 # ── creation ──────────────────────────────────────────────────────────────────────
@@ -124,6 +186,12 @@ def create_membership_job(payload: dict[str, Any]) -> MembershipJob:
     action = str(payload.get("action") or "").strip()
     if action not in {MembershipJob.Action.JOIN, MembershipJob.Action.LEAVE, MembershipJob.Action.VIEW}:
         raise WorkerServiceError("unsupported action")
+    service_id = str(payload.get("service_id") or "").strip()
+    if action == MembershipJob.Action.VIEW and view_post_count(service_id) is None:
+        # A view order's service id fixes how many posts each account views. Guessing a count for an id
+        # nobody mapped would deliver something the customer did not buy.
+        known = ", ".join(sorted(settings.WORKER_VIEW_POST_COUNTS, key=int))
+        raise WorkerServiceError(f"unknown view service_id {service_id!r} (expected the local ids {known}, or those + 300)")
     target = str(payload.get("target") or "").strip()
     try:
         target_key = normalize_target_key(target)
@@ -154,7 +222,12 @@ def create_membership_job(payload: dict[str, Any]) -> MembershipJob:
                 target_count,
                 accepted,
             )
-            if action == MembershipJob.Action.JOIN and accepted == 0:
+            if action in (MembershipJob.Action.JOIN, MembershipJob.Action.VIEW) and accepted == 0:
+                # skip_locked hides accounts another order is reserving right now. If some would be free
+                # without the lock, this is contention rather than a full pool, and the panel must retry it.
+                free_now = count_free_accounts(action, target_key)
+                if free_now > 0:
+                    raise PoolBusyError(requested_count=requested_count, available_count=free_now)
                 raise InsufficientCapacityError(requested_count=requested_count, available_count=0)
             job = MembershipJob.objects.create(
                 external_order_id=external_order_id,
@@ -167,7 +240,7 @@ def create_membership_job(payload: dict[str, Any]) -> MembershipJob:
                 accepted_count=accepted,
                 skipped_count=max(0, target_count - accepted),
                 status=MembershipJob.Status.INPROGRESS if accounts else MembershipJob.Status.FAIL,
-                service_id=str(payload.get("service_id") or ""),
+                service_id=service_id,
                 retention_days=optional_positive_int(payload.get("retention_days")),
                 callback_url=callback_url,
                 started_at=now if accounts else None,
@@ -272,16 +345,41 @@ def cancel_job_invalid_target(job_id: int, *, reason: str) -> None:
     tasks.send_membership_callback_task.delay(job_id, "order_partial" if had_successes else "order_failed")
 
 
+def _replace_view_items(job: MembershipJob) -> list[int]:
+    """Give a view job fresh accounts for the views its failed items did not deliver.
+
+    Every account the job has already used is excluded, whatever became of its item: a second view by
+    the same account counts for nothing, so retrying one would only report a view that never happened.
+    Runs inside ``enqueue_replacement_items_if_needed``'s transaction, with ``job`` locked.
+    """
+    in_flight = MembershipJobItem.objects.filter(job=job, status__in=RESERVED_ITEM_STATUSES).count()
+    missing = max(0, job.total_count - job.success_count - in_flight)
+    if missing <= 0:
+        return []
+    used = list(MembershipJobItem.objects.filter(job=job).values_list("account_id", flat=True))
+    accounts = select_accounts(action=job.action, target_key=job.target_key, count=missing, exclude_account_ids=used, lock=True)
+    if not accounts:
+        return []
+    item_ids = [MembershipJobItem.objects.create(job=job, account=account).id for account in accounts]
+    job.accepted_count += len(item_ids)
+    job.status = MembershipJob.Status.INPROGRESS
+    job.finished_at = None
+    job.save(update_fields=["accepted_count", "status", "finished_at", "updated_at"])
+    return item_ids
+
+
 def enqueue_replacement_items_if_needed(job_id: int) -> Optional[list[int]]:
     """New item ids for missing join slots, ``[]`` when nothing to do, ``None`` when deferred."""
     with transaction.atomic():
         job = MembershipJob.objects.select_for_update().get(id=job_id)
-        if job.action != MembershipJob.Action.JOIN or job.status not in {
+        if job.action not in (MembershipJob.Action.JOIN, MembershipJob.Action.VIEW) or job.status not in {
             MembershipJob.Status.PENDING,
             MembershipJob.Status.INPROGRESS,
             MembershipJob.Status.ERROR,
         }:
             return []
+        if job.action == MembershipJob.Action.VIEW:
+            return _replace_view_items(job)
         in_flight = MembershipJobItem.objects.filter(job=job, status__in=RESERVED_ITEM_STATUSES).count()
         missing = max(0, job.total_count - job.success_count - in_flight)
         if missing <= 0:
@@ -379,6 +477,9 @@ def build_callback_payload(job: MembershipJob, event_type: str, item: Optional[M
         "member_count_after": job.member_count_after,
         "timestamp": timezone.now().isoformat(),
     }
+    if job.status in {MembershipJob.Status.FAIL, MembershipJob.Status.PARTIAL} and job.last_error.startswith("invalid_target"):
+        # The panel keeps ``error`` as the order's message; only the cause the customer can fix is sent.
+        payload["error"] = INVALID_TARGET_MESSAGE
     if item is not None:
         payload.update(
             {
@@ -409,13 +510,16 @@ def job_status_payload(job: MembershipJob) -> dict[str, Any]:
 
 __all__ = [
     "ACTIVE_JOB_STATUSES",
+    "INVALID_TARGET_MESSAGE",
     "RESERVED_ITEM_STATUSES",
     "RETRYABLE_SKIP_PREFIXES",
     "TERMINAL_JOB_STATUSES",
     "InsufficientCapacityError",
+    "PoolBusyError",
     "apply_bonus",
     "build_callback_payload",
     "cancel_job_invalid_target",
+    "count_free_accounts",
     "create_auto_leave_if_needed",
     "create_membership_job",
     "enqueue_replacement_items_if_needed",
@@ -427,4 +531,5 @@ __all__ = [
     "remember_nonce",
     "save_job_member_counts",
     "select_accounts",
+    "view_candidates",
 ]

@@ -6,9 +6,12 @@ nonce.  The signature is ``sha256=`` + HMAC-SHA256 over
 rejects signatures older than ``max_age_seconds`` and stores nonces to refuse
 replays.
 
-The scheme (and the default ``X-Balegram-*`` header names) is wire-compatible
-with the balegram panel, so a panel that already drives a Bale worker can drive
-a rubigram worker without changes.  ``X-Rubigram-*`` headers are accepted too.
+The digest (``timestamp.nonce.body``, header names are not part of it) is
+wire-compatible with the balegram panel.  The library default header names are
+``X-Balegram-*`` like balegram_internal's; the worker itself signs callbacks
+under ``WORKER_SIGNATURE_HEADER_PREFIX`` (``X-Rubigram`` by default, the
+namespace the panel verifies for Rubika), and accepts either namespace on
+incoming requests.
 """
 
 from __future__ import annotations

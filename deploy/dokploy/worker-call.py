@@ -46,7 +46,7 @@ def main(argv: list[str]) -> int:
     if not secret:
         print("set WORKER_SHARED_SECRET in the environment")
         return 2
-    body, headers = sign_json({}, secret=secret, header_prefix=os.environ.get("WORKER_SIGNATURE_HEADER_PREFIX", "X-Balegram"))
+    body, headers = sign_json({}, secret=secret, header_prefix=os.environ.get("WORKER_SIGNATURE_HEADER_PREFIX", "X-Rubigram"))
     request = urllib.request.Request(base_url + path, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:

@@ -7,6 +7,7 @@ Rubika targets come in five shapes::
     @name / https://rubika.ir/name       public channel username  → kind "username"
     c0… / g0… guid                       channel / group guid     → kind "guid"
     https://rubika.ir/name/<message id>  one channel post         → kind "post"
+    https://rubika.ir/c0…/<message id>   one post, channel by guid → kind "post" (value = the guid)
 
 ``normalize_target_key`` turns any of them into the key used for de-duplicating
 memberships, so ``@Name``, ``rubika.ir/name`` and ``https://rubika.ir/name/``
@@ -23,6 +24,7 @@ _HOSTS = {"rubika.ir", "www.rubika.ir", "m.rubika.ir", "web.rubika.ir"}
 _HASH_RE = re.compile(r"^[A-Za-z0-9]{16,64}$")
 _USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,63}$")
 _GUID_RE = re.compile(r"^[ugcbs]0[A-Za-z0-9]{30}$")
+_CHANNEL_GUID_RE = re.compile(r"^c0[A-Za-z0-9]{30}$")
 
 
 class TargetError(ValueError):
@@ -41,11 +43,18 @@ class TargetRef:
             return f"joinc:{self.value}"
         if self.kind == "group_link":
             return f"joing:{self.value}"
+        if self.kind == "post" and self.is_guid_post:
+            return f"post:{self.value}:{self.message_id}"  # a guid is case-sensitive; a username is not
         if self.kind == "post":
             return f"post:{self.value.lower()}:{self.message_id}"
         if self.kind == "guid":
             return f"guid:{self.value}"
         return f"user:{self.value.lower()}"
+
+    @property
+    def is_guid_post(self) -> bool:
+        """A post whose channel was written as its guid: resolved by guid, never looked up as a username."""
+        return self.kind == "post" and bool(_CHANNEL_GUID_RE.match(self.value))
 
     @property
     def is_group(self) -> bool:
@@ -79,6 +88,8 @@ def parse_target(raw_value: str) -> TargetRef:
             raise TargetError("invite link has no hash")
         return TargetRef("channel_link" if head == "joinc" else "group_link", parts[1])
     if len(parts) >= 2 and parts[1].isdigit():
+        if _CHANNEL_GUID_RE.match(parts[0]):
+            return TargetRef("post", parts[0], message_id=parts[1])
         return TargetRef("post", _username(parts[0]).value, message_id=parts[1])
     return _username(parts[0])
 

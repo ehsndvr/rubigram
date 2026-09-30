@@ -106,7 +106,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ── Worker ──────────────────────────────────────────────────────────────────────
 WORKER_PROVIDER = env("WORKER_PROVIDER", "rubigram-worker")
 WORKER_SHARED_SECRET = env("WORKER_SHARED_SECRET")
-WORKER_SIGNATURE_HEADER_PREFIX = env("WORKER_SIGNATURE_HEADER_PREFIX", "X-Balegram")  # what the panel expects on callbacks
+# What the panel verifies on callbacks. The balegram panel checks a Rubika worker under its own
+# X-Rubigram-* namespace (Bale: X-Balegram, Soroush: X-Splusgram, Eitaa: X-Eitaagram).
+WORKER_SIGNATURE_HEADER_PREFIX = env("WORKER_SIGNATURE_HEADER_PREFIX", "X-Rubigram")
 WORKER_SIGNATURE_MAX_AGE_SECONDS = env_int("WORKER_SIGNATURE_MAX_AGE_SECONDS", 300)
 WORKER_CALLBACK_TIMEOUT_SECONDS = env_float("WORKER_CALLBACK_TIMEOUT_SECONDS", 10.0)
 WORKER_ACTION_DELAY_SECONDS = env_float("WORKER_ACTION_DELAY_SECONDS", 2.0)  # minimum gap between two actions of one account
@@ -125,7 +127,11 @@ WORKER_PROXY = env("WORKER_PROXY")  # optional http(s)://, socks5:// proxy for e
 # a service that cannot answer.
 WORKER_EGRESS_ECHO_URL = env("WORKER_EGRESS_ECHO_URL", "https://api.ipify.org")
 WORKER_EGRESS_TIMEOUT_SECONDS = env_float("WORKER_EGRESS_TIMEOUT_SECONDS", 8.0)
-WORKER_VIEW_POST_COUNTS = {"4": 1, "5": 5, "6": 10, "7": 20, "8": 30}  # service_id → posts viewed per account
+# Posts viewed per account, keyed by the LOCAL service id. The panel sends its platform-wide id (Rubika = 300 + local:
+# 304 → "4"), and `rubika.view_post_count` strips the block, so both spellings resolve. Anything not listed is refused.
+WORKER_VIEW_POST_COUNTS = {"4": 1, "5": 5, "6": 10, "7": 20, "8": 30}
+# An account that viewed a target is not drawn for it again for this long (a repeat view adds nothing).
+WORKER_VIEW_REVIEW_COOLDOWN_HOURS = env_float("WORKER_VIEW_REVIEW_COOLDOWN_HOURS", 15.0)
 WORKER_THROTTLE_CONN_ERROR_SECONDS = env_int("WORKER_THROTTLE_CONN_ERROR_SECONDS", 60)
 WORKER_THROTTLE_TOO_REQUESTS_SECONDS = env_int("WORKER_THROTTLE_TOO_REQUESTS_SECONDS", 3600)
 

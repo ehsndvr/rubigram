@@ -18,6 +18,7 @@ from .models import MembershipJob
 from .services import (
     InsufficientCapacityError,
     InvalidProxyUrl,
+    PoolBusyError,
     VerifyOutcome,
     WorkerServiceError,
     account_stats,
@@ -140,6 +141,12 @@ def internal_orders_view(request: HttpRequest) -> JsonResponse:
             str(exc),
             status=422,
             extra={"code": "insufficient_capacity", "requested_count": exc.requested_count, "available_count": exc.available_count},
+        )
+    except PoolBusyError as exc:
+        return _error(
+            str(exc),
+            status=503,
+            extra={"code": "pool_busy", "requested_count": exc.requested_count, "available_count": exc.available_count},
         )
     except WorkerServiceError as exc:
         return _error(str(exc), status=422)

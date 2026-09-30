@@ -177,7 +177,7 @@ async def resolve_target(client: Client, ref: TargetRef) -> ResolvedTarget:
             return ResolvedTarget(
                 group.group_guid, "Group", getattr(group, "group_title", "") or "", _count(group), getattr(preview, "is_member", None), ref
             )
-        if ref.kind == "guid":
+        if ref.kind == "guid" or ref.is_guid_post:
             if ref.value.startswith("c0"):
                 info = await client.get_channel_info(ref.value)
                 channel = info.channel
@@ -259,6 +259,23 @@ async def leave_target(client: Client, ref: TargetRef) -> LeaveOutcome:
     return LeaveOutcome(resolved.object_guid, resolved.object_type, resolved.title or ref.value)
 
 
+def view_post_count(service_id: Any) -> Optional[int]:
+    """How many latest posts a view order's service id stands for, or ``None`` when it is not a view service.
+
+    The panel sends its platform-wide id (Rubika = 300 + the local id, so 304 is
+    the local 4); the local ids 4-8 are accepted as well.  Stripping the block
+    with ``% 100`` is what makes 305-308 view 5/10/20/30 posts instead of all
+    landing on the default.
+    """
+    counts = settings.WORKER_VIEW_POST_COUNTS
+    raw = str(service_id if service_id is not None else "").strip()
+    if not raw:
+        return None
+    if raw.isascii() and raw.isdigit():
+        return counts.get(str(int(raw) % 100))
+    return counts.get(raw)
+
+
 async def view_posts(client: Client, ref: TargetRef, *, service_id: str) -> ViewOutcome:
     """Read the latest posts (or one post) of a channel and mark them seen, which counts a view."""
     resolved = await resolve_target(client, ref)
@@ -269,7 +286,10 @@ async def view_posts(client: Client, ref: TargetRef, *, service_id: str) -> View
             raise ActionError(ActionError.INVALID_TARGET, f"post {ref.message_id} was not found in @{ref.value}")
         ids = [str(message.message_id)]
     else:
-        limit = int(settings.WORKER_VIEW_POST_COUNTS.get(str(service_id), 5))
+        limit = view_post_count(service_id)
+        if limit is None:
+            # Creation refuses these; this guards jobs that predate the check, rather than guessing a count.
+            raise ActionError(ActionError.FAILED, f"unknown view service {service_id!r}")
         page = await client.get_messages(guid, limit=limit)
         ids = [str(m.message_id) for m in page.messages if m.message_id]
     if not ids:
@@ -344,6 +364,7 @@ __all__ = [
     "run_join",
     "run_leave",
     "run_view",
+    "view_post_count",
     "view_posts",
     "worker_device_hash",
     "worker_user_agent",

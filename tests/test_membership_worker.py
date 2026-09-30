@@ -202,6 +202,41 @@ def test_targets_are_classified_and_keyed_consistently():
             parse_target(bad)
 
 
+def test_a_post_link_written_with_the_channel_guid_is_keyed_by_the_guid_with_its_case():
+    guid = "c0AbCdEf000000000000000000000x1y"[:32]
+    assert len(guid) == 32
+    ref = parse_target(f"https://rubika.ir/{guid}/123")
+    assert ref.kind == "post" and ref.is_guid_post and ref.value == guid and ref.message_id == "123"
+    assert ref.key == f"post:{guid}:123" and normalize_target_key(f"rubika.ir/{guid}/123") == ref.key
+    # a username post is unchanged: not a guid post, key lower-cased
+    user_post = parse_target("https://rubika.ir/News_Channel/12")
+    assert not user_post.is_guid_post and user_post.key == "post:news_channel:12"
+    # only channel guids get this; a 29-character look-alike is just a username
+    almost = parse_target(f"https://rubika.ir/{guid[:-1]}/5")
+    assert not almost.is_guid_post and almost.key == f"post:{guid[:-1].lower()}:5"
+
+
+def test_a_guid_post_is_resolved_by_guid_without_a_username_lookup():
+    from types import SimpleNamespace
+
+    guid = "c0EXAMPLE00000000000000000000001"
+
+    class GuidOnlyClient(FakeChannelClient):
+        info_calls: list[str] = []
+
+        async def get_object_by_username(self, username: str):
+            raise AssertionError("a guid must never be looked up as a username")
+
+        async def get_channel_info(self, channel_guid: str):
+            self.info_calls.append(channel_guid)
+            return SimpleNamespace(channel=SimpleNamespace(channel_title="Sample", count_members=3))
+
+    client = GuidOnlyClient()
+    outcome = asyncio.run(rubika.view_posts(client, parse_target(f"https://rubika.ir/{guid}/17"), service_id="304"))  # type: ignore[arg-type]
+    assert client.info_calls == [guid] and outcome.object_guid == guid and outcome.message_ids == ["17"]
+    assert client.seen == [{guid: "17"}] and client.limits == []
+
+
 # ── the signed API ─────────────────────────────────────────────────────────────
 
 
@@ -331,7 +366,7 @@ def test_dead_sessions_disable_the_account_and_another_one_takes_over(celery: Re
     assert celery.events()[-1] == "order_completed"
 
 
-def test_leave_uses_joined_accounts_and_view_cycles_the_pool(celery: Recorder, monkeypatch):
+def test_leave_uses_joined_accounts_and_view_uses_each_account_once(celery: Recorder, monkeypatch):
     first, second = make_account(1), make_account(2)
     jobs.mark_membership(first, target_key="user:sample_channel", target="@sample_channel", joined=True, title="Sample")
     left: list[str] = []
@@ -358,13 +393,13 @@ def test_leave_uses_joined_accounts_and_view_cycles_the_pool(celery: Recorder, m
             1
         ],
     )
+    # three views asked of a two-account pool: two real views, the third is the shortfall (never a repeat view)
     view_job = jobs.create_membership_job(order(action="view", count=3, service_id="5", idempotency_key="view-1"))
-    assert view_job.accepted_count == 3
+    assert view_job.accepted_count == 2 and view_job.skipped_count == 1 and view_job.total_count == 3
     process_all(celery)
     view_job.refresh_from_db()
-    assert view_job.status == MembershipJob.Status.COMPLETED and sorted(viewed) == sorted(
-        [first.session_name, second.session_name, first.session_name]
-    )
+    assert view_job.status == MembershipJob.Status.PARTIAL and sorted(viewed) == sorted([first.session_name, second.session_name])
+    assert view_job.success_count == 2 and celery.events()[-1] == "order_partial"
 
 
 def test_stale_running_items_are_recovered(celery: Recorder):
@@ -591,6 +626,307 @@ def test_callback_payload_and_bonus(monkeypatch):
         and payload["external_order_id"] == 7
     )
     assert json.loads(json.dumps(payload))["remote_order_id"] == str(job.id)
+
+
+# ── the panel's Rubika contract (service ids 301-350, X-Rubigram-*) ─────────────
+
+
+def test_view_post_counts_are_looked_up_by_local_id_so_the_platform_block_is_ignored():
+    counts = {"4": 1, "304": 1, "5": 5, "305": 5, "6": 10, "306": 10, "7": 20, "307": 20, "8": 30, "308": 30}
+    for service_id, expected in counts.items():
+        assert rubika.view_post_count(service_id) == expected, service_id
+    assert rubika.view_post_count(305) == 5  # an int works as well as the panel's string
+    # not view services: join ids, gaps, blanks, junk. None, never a default.
+    for service_id in ("301", "302", "349", "350", "309", "9", "0", "300", "", None, "abc", "３０５"):
+        assert rubika.view_post_count(service_id) is None, service_id
+
+
+class FakeChannelClient:
+    """Answers just what `view_posts` asks a client for."""
+
+    def __init__(self, total_posts: int = 40):
+        self.total_posts = total_posts
+        self.limits: list[int] = []
+        self.seen: list[dict[str, str]] = []
+
+    async def get_object_by_username(self, username: str):
+        from types import SimpleNamespace
+
+        channel = SimpleNamespace(channel_guid="c0EXAMPLE00000000000000000000009", channel_title="Sample", count_members=10)
+        return SimpleNamespace(exist=True, type="Channel", channel=channel, group=None)
+
+    async def get_messages(self, guid: str, *, limit: int):
+        from types import SimpleNamespace
+
+        self.limits.append(limit)
+        newest = self.total_posts
+        return SimpleNamespace(messages=[SimpleNamespace(message_id=str(newest - i)) for i in range(min(limit, self.total_posts))])
+
+    async def get_message(self, guid: str, message_id: str):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(message_id=message_id)
+
+    async def seen_chats(self, chats: dict[str, str]):
+        self.seen.append(chats)
+
+
+def test_each_view_service_marks_its_own_number_of_latest_posts_seen():
+    ref = parse_target("@sample_channel")
+    for service_id, posts in (("304", 1), ("305", 5), ("306", 10), ("307", 20), ("308", 30), ("5", 5)):
+        client = FakeChannelClient()
+        outcome = asyncio.run(rubika.view_posts(client, ref, service_id=service_id))  # type: ignore[arg-type]
+        assert client.limits == [posts] and len(outcome.message_ids) == posts, service_id
+        assert client.seen == [{"c0EXAMPLE00000000000000000000009": "40"}]
+    # 304 given a channel views its latest post; given a post link it views exactly that post
+    single = FakeChannelClient()
+    asyncio.run(rubika.view_posts(single, parse_target("https://rubika.ir/sample_channel/17"), service_id="304"))  # type: ignore[arg-type]
+    assert single.limits == [] and single.seen == [{"c0EXAMPLE00000000000000000000009": "17"}]
+    with pytest.raises(rubika.ActionError):
+        asyncio.run(rubika.view_posts(FakeChannelClient(), ref, service_id="301"))  # type: ignore[arg-type]
+
+
+def test_an_unknown_view_service_is_refused_at_creation(celery: Recorder):
+    make_account(1)
+    for bad in ("301", "309", "", "abc"):
+        response = post("/internal/orders/", order(action="view", count=1, service_id=bad, idempotency_key=f"bad-{bad or 'blank'}"))
+        assert response.status_code == 422, bad
+        assert "unknown view service_id" in response.json()["message"] and response.json()["ok"] is False
+    assert MembershipJob.objects.count() == 0 and celery.calls == []
+    # the ids the panel really sends are accepted, and the service id is stored as sent
+    accepted = post("/internal/orders/", order(action="view", count=1, service_id="307", idempotency_key="view-307"))
+    assert accepted.status_code == 202
+    assert MembershipJob.objects.get(idempotency_key="view-307").service_id == "307"
+    # join orders do not need a view id at all
+    assert post("/internal/orders/", order(service_id="301", idempotency_key="join-301")).status_code == 202
+
+
+def test_callbacks_are_signed_for_the_x_rubigram_namespace_the_panel_verifies(celery: Recorder, monkeypatch):
+    import hashlib
+    import hmac
+
+    import httpx
+    from django.conf import settings
+
+    from membership_worker.worker import callbacks
+
+    assert settings.WORKER_SIGNATURE_HEADER_PREFIX == "X-Rubigram"
+    job = MembershipJob.objects.create(
+        external_order_id=9,
+        idempotency_key="sig",
+        action="join",
+        target="@x",
+        target_key="user:x",
+        requested_count=1,
+        total_count=1,
+        accepted_count=1,
+        callback_url=CALLBACK,
+    )
+    sent: dict[str, Any] = {}
+
+    def fake_post(url, *, content, headers, timeout):
+        sent.update(url=url, content=content, headers=headers)
+        return httpx.Response(200, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(callbacks.httpx, "post", fake_post)
+    callbacks.send_membership_callback(job.id, "order_accepted")
+    headers = sent["headers"]
+    assert {"X-Rubigram-Signature", "X-Rubigram-Timestamp", "X-Rubigram-Nonce"} <= set(headers)
+    assert not any(name.startswith("X-Balegram") for name in headers)
+    # the digest is HMAC-SHA256 over "<timestamp>.<nonce>.<body>", exactly balegram_internal's message
+    message = f"{headers['X-Rubigram-Timestamp']}.{headers['X-Rubigram-Nonce']}.".encode() + sent["content"]
+    assert headers["X-Rubigram-Signature"] == "sha256=" + hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
+    # and the panel-side check (X-Rubigram-* only, no Balegram headers anywhere) accepts it
+    assert verify_body(sent["content"], headers=headers, secret=SECRET).nonce == headers["X-Rubigram-Nonce"]
+
+
+def test_requests_signed_only_with_x_rubigram_headers_are_accepted(celery: Recorder):
+    make_account(1)
+    body, headers = sign_json(order(), secret=SECRET, header_prefix="X-Rubigram")
+    assert all(not name.startswith("X-Balegram") for name in headers)
+    wsgi = {"HTTP_" + key.upper().replace("-", "_"): value for key, value in headers.items() if key != "Content-Type"}
+    response = HttpClient().post("/internal/orders/", data=body, content_type="application/json", **wsgi)
+    assert response.status_code == 202, response.content
+    assert response.json()["remote_order_id"] and response.json()["status"] == "inprogress"
+
+
+def test_a_join_with_accounts_locked_by_another_order_is_pool_busy_not_a_capacity_refusal(celery: Recorder, monkeypatch):
+    make_account(1)
+    monkeypatch.setattr(jobs, "select_accounts", lambda **kwargs: [])  # what skip_locked shows while a concurrent order holds the rows
+    busy = post("/internal/orders/", order(count=1, idempotency_key="busy"))
+    assert busy.status_code == 503
+    body = busy.json()
+    assert body["code"] == "pool_busy" and body["requested_count"] == 1 and body["available_count"] == 1 and body["ok"] is False
+    assert MembershipJob.objects.count() == 0
+
+    WorkerAccount.objects.all().update(status=WorkerAccount.Status.DISABLED)  # nothing could ever take it: a real refusal
+    refused = post("/internal/orders/", order(count=1, idempotency_key="empty"))
+    assert refused.status_code == 422 and refused.json()["code"] == "insufficient_capacity"
+    assert refused.json()["requested_count"] == 1 and refused.json()["available_count"] == 0
+
+
+def test_a_failed_order_says_why_only_when_the_target_was_the_problem(celery: Recorder, monkeypatch):
+    make_account(1)
+    monkeypatch.setattr(
+        rubika,
+        "run_join",
+        lambda **kwargs: (_ for _ in ()).throw(rubika.ActionError(rubika.ActionError.INVALID_TARGET, "channel invite link is invalid")),
+    )
+    job = jobs.create_membership_job(order(count=1, target="https://rubika.ir/joinc/ABCDEF0123456789ABCDEF0123456789"))
+    accepted = jobs.build_callback_payload(job, "order_accepted")
+    assert "error" not in accepted
+    items.process_membership_job_item(celery.item_ids()[0])
+    job.refresh_from_db()
+    failed = jobs.build_callback_payload(job, "order_failed")
+    assert failed["status"] == "fail" and failed["error"] == jobs.INVALID_TARGET_MESSAGE
+    assert "invite" not in failed["error"]  # the worker's own diagnostics stay out of the customer-visible field
+
+
+# ── view orders use distinct accounts ─────────────────────────────────────────────
+
+
+def _stub_view(monkeypatch) -> list[str]:
+    viewed: list[str] = []
+    monkeypatch.setattr(
+        rubika,
+        "run_view",
+        lambda **kwargs: (viewed.append(kwargs["session_name"]), rubika.ViewOutcome("c0EXAMPLE00000000000000000000009", ["1"]))[1],
+    )
+    return viewed
+
+
+def _view(key: str, count: int, target: str = "@sample_channel", service_id: str = "305", external: int = 1) -> dict[str, Any]:
+    return order(action="view", count=count, service_id=service_id, target=target, idempotency_key=key, external_order_id=external)
+
+
+def test_a_view_job_never_draws_the_same_account_twice(celery: Recorder, monkeypatch):
+    for index in range(5):
+        make_account(index)
+    viewed = _stub_view(monkeypatch)
+    job = jobs.create_membership_job(_view("distinct", 5))
+    assert job.accepted_count == 5 and job.skipped_count == 0
+    assert len(set(job.items.values_list("account_id", flat=True))) == 5
+    process_all(celery)
+    job.refresh_from_db()
+    assert job.status == MembershipJob.Status.COMPLETED and len(viewed) == len(set(viewed)) == 5
+
+
+def test_accounts_reserved_by_a_running_view_job_on_the_same_target_are_skipped(celery: Recorder):
+    accounts = [make_account(index) for index in range(4)]
+    first = jobs.create_membership_job(_view("first", 3))
+    second = jobs.create_membership_job(_view("second", 3, external=2))
+    assert first.accepted_count == 3 and second.accepted_count == 1  # only the fourth account was free
+    assert set(second.items.values_list("account_id", flat=True)).isdisjoint(first.items.values_list("account_id", flat=True))
+    # another target has its own reservations
+    other = jobs.create_membership_job(_view("other", 4, target="@another_channel", external=3))
+    assert other.accepted_count == len(accounts)
+
+
+def test_a_successful_view_is_recorded_and_excludes_the_account_for_the_cooldown(celery: Recorder, monkeypatch):
+    from datetime import timedelta
+
+    from django.conf import settings
+
+    from membership_worker.worker.models import WorkerPostView
+
+    for index in range(3):
+        make_account(index)
+    _stub_view(monkeypatch)
+    first = jobs.create_membership_job(_view("cool-1", 2))
+    process_all(celery)
+    assert WorkerPostView.objects.filter(target_key="user:sample_channel").count() == 2
+
+    # the next order only gets the account that has not viewed yet; the shortfall is skipped
+    second = jobs.create_membership_job(_view("cool-2", 3, external=2))
+    assert second.accepted_count == 1 and second.skipped_count == 2
+    assert set(second.items.values_list("account_id", flat=True)).isdisjoint(first.items.values_list("account_id", flat=True))
+    process_all(celery)
+    second.refresh_from_db()
+    assert second.status == MembershipJob.Status.PARTIAL and second.success_count == 1
+
+    # a view of a different target does not count against this one
+    assert jobs.create_membership_job(_view("cool-3", 3, target="@another_channel", external=3)).accepted_count == 3
+
+    # once the cooldown has passed the account is eligible again, and its row is refreshed rather than duplicated
+    assert settings.WORKER_VIEW_REVIEW_COOLDOWN_HOURS == 15
+    WorkerPostView.objects.update(viewed_at=timezone.now() - timedelta(hours=16))
+    again = jobs.create_membership_job(_view("cool-4", 3, external=4))
+    assert again.accepted_count == 3
+    process_all(celery)
+    assert WorkerPostView.objects.filter(target_key="user:sample_channel").count() == 3
+    assert not WorkerPostView.objects.filter(viewed_at__lt=timezone.now() - timedelta(hours=1), target_key="user:sample_channel").exists()
+
+
+def test_a_failed_view_is_not_recorded_as_a_view(celery: Recorder, monkeypatch):
+    from membership_worker.worker.models import WorkerPostView
+
+    make_account(1)
+    monkeypatch.setattr(rubika, "run_view", lambda **kwargs: (_ for _ in ()).throw(rubika.ActionError(rubika.ActionError.FAILED, "boom")))
+    job = jobs.create_membership_job(_view("fail-view", 1))
+    process_all(celery)
+    job.refresh_from_db()
+    assert job.status == MembershipJob.Status.FAIL and WorkerPostView.objects.count() == 0
+
+
+def test_a_view_with_no_eligible_account_is_refused_like_a_join(celery: Recorder, monkeypatch):
+    make_account(1)
+    _stub_view(monkeypatch)
+    jobs.create_membership_job(_view("fill", 1))
+    process_all(celery)
+    refused = post("/internal/orders/", _view("nobody", 1, external=2))
+    assert refused.status_code == 422
+    body = refused.json()
+    assert body["code"] == "insufficient_capacity" and body["requested_count"] == 1 and body["available_count"] == 0
+    assert MembershipJob.objects.filter(idempotency_key="nobody").count() == 0
+
+    # locked by a concurrent order rather than exhausted: transient, so the panel retries instead of refunding
+    make_account(2)
+    monkeypatch.setattr(jobs, "select_accounts", lambda **kwargs: [])
+    busy = post("/internal/orders/", _view("busy-view", 1, external=3))
+    assert busy.status_code == 503 and busy.json()["code"] == "pool_busy" and busy.json()["available_count"] == 1
+
+
+def test_a_short_view_job_settles_partial_and_reports_the_counts_the_panel_refunds_against(celery: Recorder, monkeypatch):
+    for index in range(2):
+        make_account(index)
+    _stub_view(monkeypatch)
+    job = jobs.create_membership_job(_view("short", 5))
+    assert job.accepted_count == 2 and job.skipped_count == 3
+    process_all(celery)
+    job.refresh_from_db()
+    assert job.status == MembershipJob.Status.PARTIAL
+    payload = jobs.build_callback_payload(job, "order_partial")
+    # the panel refunds (requested - success_count) / requested of the debit
+    assert payload["status"] == "partial" and payload["success_count"] == 2 and payload["total_count"] == 5
+    assert payload["skipped_count"] == 3 and celery.events()[-1] == "order_partial"
+
+
+def test_replacement_for_a_failed_view_never_reuses_an_account_the_job_already_used(celery: Recorder, monkeypatch):
+    accounts = [make_account(index) for index in range(4)]
+    dead = accounts[0]
+
+    def run_view(**kwargs):
+        if kwargs["session_name"] == dead.session_name:
+            raise rubika.ActionError(rubika.ActionError.CONN_ERROR, "reset")
+        return rubika.ViewOutcome("c0EXAMPLE00000000000000000000009", ["1"])
+
+    monkeypatch.setattr(rubika, "run_view", run_view)
+    job = jobs.create_membership_job(_view("refill", 3))
+    assert set(job.items.values_list("account_id", flat=True)) == {a.id for a in accounts[:3]}
+    process_all(celery)
+    job.refresh_from_db()
+    used = list(job.items.values_list("account_id", flat=True))
+    # the failed account was skipped, the spare fourth account took its slot, nobody appears twice
+    assert len(used) == len(set(used)) == 4 and accounts[3].id in used
+    assert job.success_count == 3 and job.status == MembershipJob.Status.COMPLETED
+
+    # a pool of one whose only account fails: no retry of that account, the job settles fail
+    WorkerAccount.objects.exclude(id=dead.id).update(status=WorkerAccount.Status.DISABLED)
+    job2 = jobs.create_membership_job(_view("refill-2", 1, target="@second_channel", external=2))
+    process_all(celery)
+    job2.refresh_from_db()
+    assert list(job2.items.values_list("account_id", flat=True)) == [dead.id]
+    assert job2.status == MembershipJob.Status.FAIL and job2.success_count == 0
 
 
 # ── the exit a login leaves through ───────────────────────────────────────────

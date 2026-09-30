@@ -131,6 +131,24 @@ class WorkerMembership(models.Model):
         indexes = [models.Index(fields=["target_key", "status"])]
 
 
+class WorkerPostView(models.Model):
+    """The last time an account viewed a target: what keeps one view order from re-using an account.
+
+    A repeat view by the same account adds nothing to a post's counter, so a view order draws only
+    accounts whose last view of this ``target_key`` is older than ``WORKER_VIEW_REVIEW_COOLDOWN_HOURS``.
+    One row per (account, target_key), refreshed on every successful view. The key is the order's own
+    target key, so a channel and one of its post links are different targets here.
+    """
+
+    account = models.ForeignKey(WorkerAccount, on_delete=models.CASCADE, related_name="post_views")
+    target_key = models.CharField(max_length=512)
+    viewed_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["account", "target_key"], name="uniq_worker_view_account_target")]
+        indexes = [models.Index(fields=["target_key", "viewed_at"])]
+
+
 class MembershipJob(models.Model):
     class Action(models.TextChoices):
         JOIN = "join", "Join"
