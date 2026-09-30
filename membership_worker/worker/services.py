@@ -19,6 +19,7 @@ from .health import availability_map, availability_snapshot, probe_sessions, sca
 from .items import process_membership_job_item
 from .jobs import (
     InsufficientCapacityError,
+    PoolBusyError,
     build_callback_payload,
     create_membership_job,
     finalize_job_if_done,
@@ -36,6 +37,7 @@ from .recovery import (
 __all__ = [
     "InsufficientCapacityError",
     "InvalidProxyUrl",
+    "PoolBusyError",
     "StartAuthOutcome",
     "VerifyOutcome",
     "WorkerServiceError",

@@ -593,6 +593,160 @@ def test_callback_payload_and_bonus(monkeypatch):
     assert json.loads(json.dumps(payload))["remote_order_id"] == str(job.id)
 
 
+# ── the panel's Rubika contract (service ids 301-350, X-Rubigram-*) ─────────────
+
+
+def test_view_post_counts_are_looked_up_by_local_id_so_the_platform_block_is_ignored():
+    counts = {"4": 1, "304": 1, "5": 5, "305": 5, "6": 10, "306": 10, "7": 20, "307": 20, "8": 30, "308": 30}
+    for service_id, expected in counts.items():
+        assert rubika.view_post_count(service_id) == expected, service_id
+    assert rubika.view_post_count(305) == 5  # an int works as well as the panel's string
+    # not view services: join ids, gaps, blanks, junk. None, never a default.
+    for service_id in ("301", "302", "349", "350", "309", "9", "0", "300", "", None, "abc", "３０５"):
+        assert rubika.view_post_count(service_id) is None, service_id
+
+
+class FakeChannelClient:
+    """Answers just what `view_posts` asks a client for."""
+
+    def __init__(self, total_posts: int = 40):
+        self.total_posts = total_posts
+        self.limits: list[int] = []
+        self.seen: list[dict[str, str]] = []
+
+    async def get_object_by_username(self, username: str):
+        from types import SimpleNamespace
+
+        channel = SimpleNamespace(channel_guid="c0EXAMPLE00000000000000000000009", channel_title="Sample", count_members=10)
+        return SimpleNamespace(exist=True, type="Channel", channel=channel, group=None)
+
+    async def get_messages(self, guid: str, *, limit: int):
+        from types import SimpleNamespace
+
+        self.limits.append(limit)
+        newest = self.total_posts
+        return SimpleNamespace(messages=[SimpleNamespace(message_id=str(newest - i)) for i in range(min(limit, self.total_posts))])
+
+    async def get_message(self, guid: str, message_id: str):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(message_id=message_id)
+
+    async def seen_chats(self, chats: dict[str, str]):
+        self.seen.append(chats)
+
+
+def test_each_view_service_marks_its_own_number_of_latest_posts_seen():
+    ref = parse_target("@sample_channel")
+    for service_id, posts in (("304", 1), ("305", 5), ("306", 10), ("307", 20), ("308", 30), ("5", 5)):
+        client = FakeChannelClient()
+        outcome = asyncio.run(rubika.view_posts(client, ref, service_id=service_id))  # type: ignore[arg-type]
+        assert client.limits == [posts] and len(outcome.message_ids) == posts, service_id
+        assert client.seen == [{"c0EXAMPLE00000000000000000000009": "40"}]
+    # 304 given a channel views its latest post; given a post link it views exactly that post
+    single = FakeChannelClient()
+    asyncio.run(rubika.view_posts(single, parse_target("https://rubika.ir/sample_channel/17"), service_id="304"))  # type: ignore[arg-type]
+    assert single.limits == [] and single.seen == [{"c0EXAMPLE00000000000000000000009": "17"}]
+    with pytest.raises(rubika.ActionError):
+        asyncio.run(rubika.view_posts(FakeChannelClient(), ref, service_id="301"))  # type: ignore[arg-type]
+
+
+def test_an_unknown_view_service_is_refused_at_creation(celery: Recorder):
+    make_account(1)
+    for bad in ("301", "309", "", "abc"):
+        response = post("/internal/orders/", order(action="view", count=1, service_id=bad, idempotency_key=f"bad-{bad or 'blank'}"))
+        assert response.status_code == 422, bad
+        assert "unknown view service_id" in response.json()["message"] and response.json()["ok"] is False
+    assert MembershipJob.objects.count() == 0 and celery.calls == []
+    # the ids the panel really sends are accepted, and the service id is stored as sent
+    accepted = post("/internal/orders/", order(action="view", count=1, service_id="307", idempotency_key="view-307"))
+    assert accepted.status_code == 202
+    assert MembershipJob.objects.get(idempotency_key="view-307").service_id == "307"
+    # join orders do not need a view id at all
+    assert post("/internal/orders/", order(service_id="301", idempotency_key="join-301")).status_code == 202
+
+
+def test_callbacks_are_signed_for_the_x_rubigram_namespace_the_panel_verifies(celery: Recorder, monkeypatch):
+    import hashlib
+    import hmac
+
+    import httpx
+    from django.conf import settings
+
+    from membership_worker.worker import callbacks
+
+    assert settings.WORKER_SIGNATURE_HEADER_PREFIX == "X-Rubigram"
+    job = MembershipJob.objects.create(
+        external_order_id=9,
+        idempotency_key="sig",
+        action="join",
+        target="@x",
+        target_key="user:x",
+        requested_count=1,
+        total_count=1,
+        accepted_count=1,
+        callback_url=CALLBACK,
+    )
+    sent: dict[str, Any] = {}
+
+    def fake_post(url, *, content, headers, timeout):
+        sent.update(url=url, content=content, headers=headers)
+        return httpx.Response(200, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(callbacks.httpx, "post", fake_post)
+    callbacks.send_membership_callback(job.id, "order_accepted")
+    headers = sent["headers"]
+    assert {"X-Rubigram-Signature", "X-Rubigram-Timestamp", "X-Rubigram-Nonce"} <= set(headers)
+    assert not any(name.startswith("X-Balegram") for name in headers)
+    # the digest is HMAC-SHA256 over "<timestamp>.<nonce>.<body>", exactly balegram_internal's message
+    message = f"{headers['X-Rubigram-Timestamp']}.{headers['X-Rubigram-Nonce']}.".encode() + sent["content"]
+    assert headers["X-Rubigram-Signature"] == "sha256=" + hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
+    # and the panel-side check (X-Rubigram-* only, no Balegram headers anywhere) accepts it
+    assert verify_body(sent["content"], headers=headers, secret=SECRET).nonce == headers["X-Rubigram-Nonce"]
+
+
+def test_requests_signed_only_with_x_rubigram_headers_are_accepted(celery: Recorder):
+    make_account(1)
+    body, headers = sign_json(order(), secret=SECRET, header_prefix="X-Rubigram")
+    assert all(not name.startswith("X-Balegram") for name in headers)
+    wsgi = {"HTTP_" + key.upper().replace("-", "_"): value for key, value in headers.items() if key != "Content-Type"}
+    response = HttpClient().post("/internal/orders/", data=body, content_type="application/json", **wsgi)
+    assert response.status_code == 202, response.content
+    assert response.json()["remote_order_id"] and response.json()["status"] == "inprogress"
+
+
+def test_a_join_with_accounts_locked_by_another_order_is_pool_busy_not_a_capacity_refusal(celery: Recorder, monkeypatch):
+    make_account(1)
+    monkeypatch.setattr(jobs, "select_accounts", lambda **kwargs: [])  # what skip_locked shows while a concurrent order holds the rows
+    busy = post("/internal/orders/", order(count=1, idempotency_key="busy"))
+    assert busy.status_code == 503
+    body = busy.json()
+    assert body["code"] == "pool_busy" and body["requested_count"] == 1 and body["available_count"] == 1 and body["ok"] is False
+    assert MembershipJob.objects.count() == 0
+
+    WorkerAccount.objects.all().update(status=WorkerAccount.Status.DISABLED)  # nothing could ever take it: a real refusal
+    refused = post("/internal/orders/", order(count=1, idempotency_key="empty"))
+    assert refused.status_code == 422 and refused.json()["code"] == "insufficient_capacity"
+    assert refused.json()["requested_count"] == 1 and refused.json()["available_count"] == 0
+
+
+def test_a_failed_order_says_why_only_when_the_target_was_the_problem(celery: Recorder, monkeypatch):
+    make_account(1)
+    monkeypatch.setattr(
+        rubika,
+        "run_join",
+        lambda **kwargs: (_ for _ in ()).throw(rubika.ActionError(rubika.ActionError.INVALID_TARGET, "channel invite link is invalid")),
+    )
+    job = jobs.create_membership_job(order(count=1, target="https://rubika.ir/joinc/ABCDEF0123456789ABCDEF0123456789"))
+    accepted = jobs.build_callback_payload(job, "order_accepted")
+    assert "error" not in accepted
+    items.process_membership_job_item(celery.item_ids()[0])
+    job.refresh_from_db()
+    failed = jobs.build_callback_payload(job, "order_failed")
+    assert failed["status"] == "fail" and failed["error"] == jobs.INVALID_TARGET_MESSAGE
+    assert "invite" not in failed["error"]  # the worker's own diagnostics stay out of the customer-visible field
+
+
 # ── the exit a login leaves through ───────────────────────────────────────────
 
 
