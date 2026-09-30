@@ -115,12 +115,21 @@ Persian message, as the panel has no password step. Responses carry
 `auth_id = user guid` and `user_id = null` (Rubika has no numeric ids).
 
 **Where the code goes.** `start-login` answers `sent_code_type` (`SMS` or
-`Internal`), `code_digits_count` (five) and `code_via_telegram: false`. The last
+`Internal`), `code_digits_count` (six) and `code_via_telegram: false`. The last
 one is stated rather than left out, because a missing field reads as *unknown*:
 Bale and Soroush hand a foreign number's code to Telegram, which is what lets a
 panel register from a `.session` file with nobody typing anything, and Rubika
 never does. A caller waiting for a Rubika code in a Telegram chat waits until it
 has expired.
+
+**Asking again sends nothing.** While an earlier code for the phone is still
+valid, `sendCode` answers `OK` with that code's `phone_code_hash` and no
+`send_type`, and no SMS goes out (observed live: a second request a minute after
+the first reused the hash; a request hours later got a new hash and a new SMS).
+`start-login` then answers `code_already_sent: true` and `sent_code_type: null`.
+The login still works — the code from the first SMS is valid with the returned
+`transaction_hash` — so the panel should tell the user to type the code they
+already have instead of saying a new one was sent.
 
 **The exit.** `proxy` is the address *this* login leaves from, and it beats
 `WORKER_PROXY` for the call. It exists because the panel picks an exit country

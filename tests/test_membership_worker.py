@@ -436,7 +436,7 @@ class FakeStorage:
 class FakeSentCode:
     def __init__(self, status="OK", phone_code_hash="hash-1", send_type="SMS"):
         self.status, self.phone_code_hash, self.send_type = status, phone_code_hash, send_type
-        self.code_digits_count = 5
+        self.code_digits_count = 6
 
 
 class FakeUser:
@@ -955,9 +955,21 @@ def test_login_leaves_through_the_exit_the_panel_named(fake_login):
     assert started["grpc_cookies"]["proxy"] == proxy
     # Rubika never hands a code to Telegram, and the panel is told so outright.
     assert started["code_via_telegram"] is False
-    assert started["sent_code_type"] == "SMS" and started["code_digits_count"] == 5
+    assert started["sent_code_type"] == "SMS" and started["code_digits_count"] == 6
+    assert started["code_already_sent"] is False
     # No echo service is configured in tests, so there is nothing to report.
     assert started["egress_ip"] is None
+
+    # Asked again while the first code is valid, Rubika reuses its hash and
+    # sends no SMS; the panel must hear that rather than "code sent".
+    async def reused(self, phone, **kwargs):
+        return FakeSentCode(send_type=None)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(FakeLoginClient, "send_code", reused)
+        again = post("/internal/accounts/start-login/", {"username": "admin", "phone": "989120000010"}).json()
+    assert again["ok"] and again["transaction_hash"] == "hash-1"
+    assert again["code_already_sent"] is True and again["sent_code_type"] is None
 
     refused = post("/internal/accounts/start-login/", {"username": "admin", "phone": "989120000011", "proxy": "host:1080"})
     assert refused.status_code == 422 and "proxy" in refused.json()["message"]

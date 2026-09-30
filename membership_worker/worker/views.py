@@ -219,6 +219,10 @@ def internal_start_login_view(request: HttpRequest) -> JsonResponse:
             "code_via_telegram": outcome.code_via_telegram,
             "code_digits_count": outcome.code_digits_count,
             "next_send_code_wait_time": outcome.next_send_code_wait_time,
+            # No new SMS went out: an earlier code for this phone is still
+            # valid and is the one to type. Without this the panel reports a
+            # fresh send and the user waits for a text that never arrives.
+            "code_already_sent": outcome.code_already_sent,
             # The address Rubika actually saw. The panel measures its own hop and
             # cannot measure this one, so this is the only evidence that the exit
             # it chose is the exit that registered the number.

@@ -50,11 +50,18 @@ class StartAuthOutcome:
     #: so a caller waiting for one waits until the code has expired.
     sent_code_type: Optional[str] = None
     #: How many digits that code has, straight from ``sendCode``.  Rubika sends
-    #: five; reported rather than assumed, so a caller's input box is right even
+    #: six; reported rather than assumed, so a caller's input box is right even
     #: on the day it changes.
     code_digits_count: Optional[int] = None
     #: Seconds Rubika will refuse a resend for, when it says.
     next_send_code_wait_time: Optional[int] = None
+    #: True when Rubika sent nothing this time.  Asked again while an earlier
+    #: code for the phone is still valid, ``sendCode`` answers ``OK`` with that
+    #: code's ``phone_code_hash`` and no ``send_type`` — and no SMS.  The earlier
+    #: code still works with this hash, so this is not a failure, but a panel
+    #: that says "code sent" here has the user waiting for a text that is not
+    #: coming.
+    code_already_sent: bool = False
     #: Always false, and sent anyway: a field that is missing reads as "unknown"
     #: to the panel, and this is known.
     code_via_telegram: bool = False
@@ -169,7 +176,14 @@ async def start_phone_login(*, username: str, phone: str, proxy: Optional[str] =
         raise WorkerServiceError(f"ارسال کد تایید انجام نشد ({sent.status or 'no status'})")
     login_state = await client.export_session_string()
     _PENDING[session_name] = {"client": client, "phone": normalized_phone, "username": username, "proxy": proxy}
-    log.info("start_login session=%s send_type=%s egress=%s", session_name[:16], sent.send_type, egress_ip or "?")
+    code_already_sent = not sent.send_type
+    log.info(
+        "start_login session=%s send_type=%s already_sent=%s egress=%s",
+        session_name[:16],
+        sent.send_type,
+        code_already_sent,
+        egress_ip or "?",
+    )
     return StartAuthOutcome(
         transaction_hash=str(sent.phone_code_hash),
         phone=normalized_phone,
@@ -186,6 +200,7 @@ async def start_phone_login(*, username: str, phone: str, proxy: Optional[str] =
         sent_code_type=str(sent.send_type) if sent.send_type else None,
         code_digits_count=_optional_int(getattr(sent, "code_digits_count", None)),
         next_send_code_wait_time=_optional_int(getattr(sent, "next_send_code_wait_time", None)),
+        code_already_sent=code_already_sent,
         egress_ip=egress_ip,
     )
 
