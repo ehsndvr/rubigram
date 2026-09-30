@@ -27,7 +27,15 @@ worker ──signed HTTPS──▶ panel callback              order_accepted / 
      reserved by another running join for it; the count is inflated by
      `WORKER_BONUS_PERCENTAGE`. No free account → `422 insufficient_capacity`.
    - **leave**: accounts recorded as members of the target.
-   - **view**: any active accounts, cycled to reach the count.
+   - **view**: distinct active accounts, never the same account twice (a repeat view adds nothing
+     to a post's counter, so the pool is not cycled). Accounts that viewed the same `target_key`
+     within `WORKER_VIEW_REVIEW_COOLDOWN_HOURS` (default 15; ledger `WorkerPostView`, written when a
+     view succeeds) and accounts reserved by another running view job on it are skipped. Fewer
+     eligible than asked: the order takes what it can, the shortfall is `skipped_count`, and it
+     settles `partial` so the panel refunds the undelivered part. None eligible: `422
+     insufficient_capacity`. A view that fails is retried with a *new* account, never one the job
+     already used. The ledger is keyed by the order's own target key, so a channel and one of its
+     post links are different targets and **views are not de-duplicated across them**.
 3. One `MembershipJobItem` per account is queued on Celery. Each item opens a
    short-lived rubigram client from the stored session string (HTTP only,
    no socket, DC list taken from the session), performs the action, and
@@ -169,6 +177,7 @@ the file. The important ones:
 | `WORKER_PROVIDER` | name reported to the panel (`rubigram-worker`) |
 | `WORKER_SIGNATURE_HEADER_PREFIX` | header names on callbacks (default `X-Rubigram`, which is what the balegram panel verifies for its Rubika platform; a panel that drives this worker as a Bale-style worker needs `X-Balegram`). Incoming requests are accepted under either namespace |
 | `WORKER_ACTION_DELAY_SECONDS`, `WORKER_ACTION_TIMEOUT_SECONDS` | pacing and per-request timeout |
+| `WORKER_VIEW_REVIEW_COOLDOWN_HOURS` | how long an account that viewed a target is left out of new view orders for it (default 15) |
 | `WORKER_BONUS_PERCENTAGE`, `WORKER_JOB_MAX_WAIT_HOURS` | join buffer and how long missing slots are refilled |
 | `WORKER_USER_AGENT`, `WORKER_DEVICE_HASH`, `WORKER_SYSTEM_VERSION`, `WORKER_DEVICE_MODEL`, `WORKER_PROXY` | the identity and network path of every Rubika client (a per-call `proxy` beats `WORKER_PROXY`) |
 | `WORKER_EGRESS_ECHO_URL`, `WORKER_EGRESS_TIMEOUT_SECONDS` | where "which address did Rubika see?" is asked. Empty turns the check off — right for a deployment with no outbound to it |

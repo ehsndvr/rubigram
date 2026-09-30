@@ -12,7 +12,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from . import jobs, rubika
-from .models import AccountThrottle, MembershipJob, MembershipJobItem, WorkerAccount, WorkerAccountCredential
+from .models import AccountThrottle, MembershipJob, MembershipJobItem, WorkerAccount, WorkerAccountCredential, WorkerPostView
 
 log = logging.getLogger("membership_worker.items")
 
@@ -115,6 +115,7 @@ def _run_action(item: MembershipJobItem) -> str:
             session_name=account.session_name, session_string=session_string, target=job.target, service_id=job.service_id
         )
         refresh_credential(account, view.session_string)
+        WorkerPostView.objects.update_or_create(account=account, target_key=job.target_key, defaults={"viewed_at": timezone.now()})
         finish_item(item, status=MembershipJobItem.Status.SUCCESS, message=f"viewed {len(view.message_ids)} post(s)")
         return "item_success"
     if not jobs.WorkerMembership.objects.filter(

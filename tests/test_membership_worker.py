@@ -331,7 +331,7 @@ def test_dead_sessions_disable_the_account_and_another_one_takes_over(celery: Re
     assert celery.events()[-1] == "order_completed"
 
 
-def test_leave_uses_joined_accounts_and_view_cycles_the_pool(celery: Recorder, monkeypatch):
+def test_leave_uses_joined_accounts_and_view_uses_each_account_once(celery: Recorder, monkeypatch):
     first, second = make_account(1), make_account(2)
     jobs.mark_membership(first, target_key="user:sample_channel", target="@sample_channel", joined=True, title="Sample")
     left: list[str] = []
@@ -358,13 +358,13 @@ def test_leave_uses_joined_accounts_and_view_cycles_the_pool(celery: Recorder, m
             1
         ],
     )
+    # three views asked of a two-account pool: two real views, the third is the shortfall (never a repeat view)
     view_job = jobs.create_membership_job(order(action="view", count=3, service_id="5", idempotency_key="view-1"))
-    assert view_job.accepted_count == 3
+    assert view_job.accepted_count == 2 and view_job.skipped_count == 1 and view_job.total_count == 3
     process_all(celery)
     view_job.refresh_from_db()
-    assert view_job.status == MembershipJob.Status.COMPLETED and sorted(viewed) == sorted(
-        [first.session_name, second.session_name, first.session_name]
-    )
+    assert view_job.status == MembershipJob.Status.PARTIAL and sorted(viewed) == sorted([first.session_name, second.session_name])
+    assert view_job.success_count == 2 and celery.events()[-1] == "order_partial"
 
 
 def test_stale_running_items_are_recovered(celery: Recorder):
@@ -745,6 +745,153 @@ def test_a_failed_order_says_why_only_when_the_target_was_the_problem(celery: Re
     failed = jobs.build_callback_payload(job, "order_failed")
     assert failed["status"] == "fail" and failed["error"] == jobs.INVALID_TARGET_MESSAGE
     assert "invite" not in failed["error"]  # the worker's own diagnostics stay out of the customer-visible field
+
+
+# ── view orders use distinct accounts ─────────────────────────────────────────────
+
+
+def _stub_view(monkeypatch) -> list[str]:
+    viewed: list[str] = []
+    monkeypatch.setattr(
+        rubika,
+        "run_view",
+        lambda **kwargs: (viewed.append(kwargs["session_name"]), rubika.ViewOutcome("c0EXAMPLE00000000000000000000009", ["1"]))[1],
+    )
+    return viewed
+
+
+def _view(key: str, count: int, target: str = "@sample_channel", service_id: str = "305", external: int = 1) -> dict[str, Any]:
+    return order(action="view", count=count, service_id=service_id, target=target, idempotency_key=key, external_order_id=external)
+
+
+def test_a_view_job_never_draws_the_same_account_twice(celery: Recorder, monkeypatch):
+    for index in range(5):
+        make_account(index)
+    viewed = _stub_view(monkeypatch)
+    job = jobs.create_membership_job(_view("distinct", 5))
+    assert job.accepted_count == 5 and job.skipped_count == 0
+    assert len(set(job.items.values_list("account_id", flat=True))) == 5
+    process_all(celery)
+    job.refresh_from_db()
+    assert job.status == MembershipJob.Status.COMPLETED and len(viewed) == len(set(viewed)) == 5
+
+
+def test_accounts_reserved_by_a_running_view_job_on_the_same_target_are_skipped(celery: Recorder):
+    accounts = [make_account(index) for index in range(4)]
+    first = jobs.create_membership_job(_view("first", 3))
+    second = jobs.create_membership_job(_view("second", 3, external=2))
+    assert first.accepted_count == 3 and second.accepted_count == 1  # only the fourth account was free
+    assert set(second.items.values_list("account_id", flat=True)).isdisjoint(first.items.values_list("account_id", flat=True))
+    # another target has its own reservations
+    other = jobs.create_membership_job(_view("other", 4, target="@another_channel", external=3))
+    assert other.accepted_count == len(accounts)
+
+
+def test_a_successful_view_is_recorded_and_excludes_the_account_for_the_cooldown(celery: Recorder, monkeypatch):
+    from datetime import timedelta
+
+    from django.conf import settings
+
+    from membership_worker.worker.models import WorkerPostView
+
+    for index in range(3):
+        make_account(index)
+    _stub_view(monkeypatch)
+    first = jobs.create_membership_job(_view("cool-1", 2))
+    process_all(celery)
+    assert WorkerPostView.objects.filter(target_key="user:sample_channel").count() == 2
+
+    # the next order only gets the account that has not viewed yet; the shortfall is skipped
+    second = jobs.create_membership_job(_view("cool-2", 3, external=2))
+    assert second.accepted_count == 1 and second.skipped_count == 2
+    assert set(second.items.values_list("account_id", flat=True)).isdisjoint(first.items.values_list("account_id", flat=True))
+    process_all(celery)
+    second.refresh_from_db()
+    assert second.status == MembershipJob.Status.PARTIAL and second.success_count == 1
+
+    # a view of a different target does not count against this one
+    assert jobs.create_membership_job(_view("cool-3", 3, target="@another_channel", external=3)).accepted_count == 3
+
+    # once the cooldown has passed the account is eligible again, and its row is refreshed rather than duplicated
+    assert settings.WORKER_VIEW_REVIEW_COOLDOWN_HOURS == 15
+    WorkerPostView.objects.update(viewed_at=timezone.now() - timedelta(hours=16))
+    again = jobs.create_membership_job(_view("cool-4", 3, external=4))
+    assert again.accepted_count == 3
+    process_all(celery)
+    assert WorkerPostView.objects.filter(target_key="user:sample_channel").count() == 3
+    assert not WorkerPostView.objects.filter(viewed_at__lt=timezone.now() - timedelta(hours=1), target_key="user:sample_channel").exists()
+
+
+def test_a_failed_view_is_not_recorded_as_a_view(celery: Recorder, monkeypatch):
+    from membership_worker.worker.models import WorkerPostView
+
+    make_account(1)
+    monkeypatch.setattr(rubika, "run_view", lambda **kwargs: (_ for _ in ()).throw(rubika.ActionError(rubika.ActionError.FAILED, "boom")))
+    job = jobs.create_membership_job(_view("fail-view", 1))
+    process_all(celery)
+    job.refresh_from_db()
+    assert job.status == MembershipJob.Status.FAIL and WorkerPostView.objects.count() == 0
+
+
+def test_a_view_with_no_eligible_account_is_refused_like_a_join(celery: Recorder, monkeypatch):
+    make_account(1)
+    _stub_view(monkeypatch)
+    jobs.create_membership_job(_view("fill", 1))
+    process_all(celery)
+    refused = post("/internal/orders/", _view("nobody", 1, external=2))
+    assert refused.status_code == 422
+    body = refused.json()
+    assert body["code"] == "insufficient_capacity" and body["requested_count"] == 1 and body["available_count"] == 0
+    assert MembershipJob.objects.filter(idempotency_key="nobody").count() == 0
+
+    # locked by a concurrent order rather than exhausted: transient, so the panel retries instead of refunding
+    make_account(2)
+    monkeypatch.setattr(jobs, "select_accounts", lambda **kwargs: [])
+    busy = post("/internal/orders/", _view("busy-view", 1, external=3))
+    assert busy.status_code == 503 and busy.json()["code"] == "pool_busy" and busy.json()["available_count"] == 1
+
+
+def test_a_short_view_job_settles_partial_and_reports_the_counts_the_panel_refunds_against(celery: Recorder, monkeypatch):
+    for index in range(2):
+        make_account(index)
+    _stub_view(monkeypatch)
+    job = jobs.create_membership_job(_view("short", 5))
+    assert job.accepted_count == 2 and job.skipped_count == 3
+    process_all(celery)
+    job.refresh_from_db()
+    assert job.status == MembershipJob.Status.PARTIAL
+    payload = jobs.build_callback_payload(job, "order_partial")
+    # the panel refunds (requested - success_count) / requested of the debit
+    assert payload["status"] == "partial" and payload["success_count"] == 2 and payload["total_count"] == 5
+    assert payload["skipped_count"] == 3 and celery.events()[-1] == "order_partial"
+
+
+def test_replacement_for_a_failed_view_never_reuses_an_account_the_job_already_used(celery: Recorder, monkeypatch):
+    accounts = [make_account(index) for index in range(4)]
+    dead = accounts[0]
+
+    def run_view(**kwargs):
+        if kwargs["session_name"] == dead.session_name:
+            raise rubika.ActionError(rubika.ActionError.CONN_ERROR, "reset")
+        return rubika.ViewOutcome("c0EXAMPLE00000000000000000000009", ["1"])
+
+    monkeypatch.setattr(rubika, "run_view", run_view)
+    job = jobs.create_membership_job(_view("refill", 3))
+    assert set(job.items.values_list("account_id", flat=True)) == {a.id for a in accounts[:3]}
+    process_all(celery)
+    job.refresh_from_db()
+    used = list(job.items.values_list("account_id", flat=True))
+    # the failed account was skipped, the spare fourth account took its slot, nobody appears twice
+    assert len(used) == len(set(used)) == 4 and accounts[3].id in used
+    assert job.success_count == 3 and job.status == MembershipJob.Status.COMPLETED
+
+    # a pool of one whose only account fails: no retry of that account, the job settles fail
+    WorkerAccount.objects.exclude(id=dead.id).update(status=WorkerAccount.Status.DISABLED)
+    job2 = jobs.create_membership_job(_view("refill-2", 1, target="@second_channel", external=2))
+    process_all(celery)
+    job2.refresh_from_db()
+    assert list(job2.items.values_list("account_id", flat=True)) == [dead.id]
+    assert job2.status == MembershipJob.Status.FAIL and job2.success_count == 0
 
 
 # ── the exit a login leaves through ───────────────────────────────────────────

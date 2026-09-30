@@ -130,6 +130,8 @@ WORKER_EGRESS_TIMEOUT_SECONDS = env_float("WORKER_EGRESS_TIMEOUT_SECONDS", 8.0)
 # Posts viewed per account, keyed by the LOCAL service id. The panel sends its platform-wide id (Rubika = 300 + local:
 # 304 → "4"), and `rubika.view_post_count` strips the block, so both spellings resolve. Anything not listed is refused.
 WORKER_VIEW_POST_COUNTS = {"4": 1, "5": 5, "6": 10, "7": 20, "8": 30}
+# An account that viewed a target is not drawn for it again for this long (a repeat view adds nothing).
+WORKER_VIEW_REVIEW_COOLDOWN_HOURS = env_float("WORKER_VIEW_REVIEW_COOLDOWN_HOURS", 15.0)
 WORKER_THROTTLE_CONN_ERROR_SECONDS = env_int("WORKER_THROTTLE_CONN_ERROR_SECONDS", 60)
 WORKER_THROTTLE_TOO_REQUESTS_SECONDS = env_int("WORKER_THROTTLE_TOO_REQUESTS_SECONDS", 3600)
 
