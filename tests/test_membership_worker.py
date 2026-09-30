@@ -202,6 +202,41 @@ def test_targets_are_classified_and_keyed_consistently():
             parse_target(bad)
 
 
+def test_a_post_link_written_with_the_channel_guid_is_keyed_by_the_guid_with_its_case():
+    guid = "c0AbCdEf000000000000000000000x1y"[:32]
+    assert len(guid) == 32
+    ref = parse_target(f"https://rubika.ir/{guid}/123")
+    assert ref.kind == "post" and ref.is_guid_post and ref.value == guid and ref.message_id == "123"
+    assert ref.key == f"post:{guid}:123" and normalize_target_key(f"rubika.ir/{guid}/123") == ref.key
+    # a username post is unchanged: not a guid post, key lower-cased
+    user_post = parse_target("https://rubika.ir/News_Channel/12")
+    assert not user_post.is_guid_post and user_post.key == "post:news_channel:12"
+    # only channel guids get this; a 29-character look-alike is just a username
+    almost = parse_target(f"https://rubika.ir/{guid[:-1]}/5")
+    assert not almost.is_guid_post and almost.key == f"post:{guid[:-1].lower()}:5"
+
+
+def test_a_guid_post_is_resolved_by_guid_without_a_username_lookup():
+    from types import SimpleNamespace
+
+    guid = "c0EXAMPLE00000000000000000000001"
+
+    class GuidOnlyClient(FakeChannelClient):
+        info_calls: list[str] = []
+
+        async def get_object_by_username(self, username: str):
+            raise AssertionError("a guid must never be looked up as a username")
+
+        async def get_channel_info(self, channel_guid: str):
+            self.info_calls.append(channel_guid)
+            return SimpleNamespace(channel=SimpleNamespace(channel_title="Sample", count_members=3))
+
+    client = GuidOnlyClient()
+    outcome = asyncio.run(rubika.view_posts(client, parse_target(f"https://rubika.ir/{guid}/17"), service_id="304"))  # type: ignore[arg-type]
+    assert client.info_calls == [guid] and outcome.object_guid == guid and outcome.message_ids == ["17"]
+    assert client.seen == [{guid: "17"}] and client.limits == []
+
+
 # ── the signed API ─────────────────────────────────────────────────────────────
 
 

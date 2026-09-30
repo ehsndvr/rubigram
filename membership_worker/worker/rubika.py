@@ -177,7 +177,7 @@ async def resolve_target(client: Client, ref: TargetRef) -> ResolvedTarget:
             return ResolvedTarget(
                 group.group_guid, "Group", getattr(group, "group_title", "") or "", _count(group), getattr(preview, "is_member", None), ref
             )
-        if ref.kind == "guid":
+        if ref.kind == "guid" or ref.is_guid_post:
             if ref.value.startswith("c0"):
                 info = await client.get_channel_info(ref.value)
                 channel = info.channel
